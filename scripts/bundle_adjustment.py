@@ -14,13 +14,13 @@ from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustm
 
 __config__ = {
     "each_training":1, # to use less datatpoint during the optimization
-    "each_visualisation":5, # to use less datatpoints in the visualisation
+    "each_visualisation":1, # to use less datatpoints in the visualisation
     "optimize_camera_params":True, 
     "optimize_points":True, 
     "ftol":1e-14,
     "xtol":1e-14,
-    "max_nfev":10, # first optimization
-    "max_nfev2":20,# second optimization after outlier removal
+    "max_nfev":30, # first optimization
+    "max_nfev2":50,# second optimization after outlier removal
     "bounds":True, 
     "bounds_cp":[0.15]*6+[200,200,200,200]+[0.1,0.1,0,0,0],
     "bounds_pt":[100]*3,

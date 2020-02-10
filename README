@@ -18,6 +18,7 @@ export PYTHONPATH="...parent folder...:$PYTHONPATH"
 #### Compute intrinsic parameters:
 Shoot a video or take pictures of the checkerboard from multiple position making sure the checkerboard covers the whole field of view. The checkerboard has to right on the edges of the image plane!
 https://markhedleyjones.com/storage/checkerboards/Checkerboard-A4-30mm-8x6.pdf
+Make sure the squares measure 30mmx30mm after printing it if not change the printer config.
 
 Extract the frames:
 ```
