@@ -1,0 +1,97 @@
+# Multiple view calibration tool
+
+## Prerequisites
+
+- numpy
+- scipy
+- imageio
+- matplotlib
+- OpenCV
+
+## Installation
+```
+export PYTHONPATH="...parent folder...:$PYTHONPATH"
+```
+
+## Usage
+
+#### Compute intrinsic parameters:
+Shoot a video or take pictures of the checkerboard from multiple position making sure the checkerboard covers the whole field of view. The checkerboard has to right on the edges of the image plane!
+https://markhedleyjones.com/storage/checkerboards/Checkerboard-A4-30mm-8x6.pdf
+
+Extract the frames:
+```
+ffmpeg -i VIDEO -r 0.5 frames/frame_%04d.jpg
+```
+Run the following script:
+```
+python compute_intrinsics.py --folder_images ./frames -ich 6 -icw 8 -s 30 -t 24 --debug
+```
+The computation is successful if the saved images (the undistorted ones) have been correctly undistorted.
+In case of failure, shoot a new video.
+
+#### Compute relative poses:
+At this step we compute relative poses between pairs of views. These will then be chained one another to compute the pose of each camera w.r.t the first camera. In order to compute the pose of each camera, we have to manually define a minimal set of pairs of views that connect every camera.
+This is done in the file `setup.json`. The file named `landmarks.json` contains precise image points for each view that are sued to compute fudmanetal matrices and poses. The file `ìntrinsics.json` contains the intrinsic parameter for each view. The file `filenames.json` contains one filename for each view. It is used for visualisation only.
+Check section `Input files` for more details on the format.
+
+```
+python compute_relative_poses.py -s setup.json -i intrinsics.json -l landmarks.json -f filenames.json --dump_images 
+```
+The result of this operation are relative poses from the camera1 to camera2 for each pairs of views. The poses are up to scale or in other words the translation is a unit vector! 
+
+#### Concatenate relative poses:
+In this step we concatenate/chain all the relative poses to compute the actual camera poses w.r.t the first caamera. At every concatenation we scale the current relative pose to the previous ones in order to have roughly the same scale for each camera.
+The file `relative_poses.json` is the output of the previous step.
+```
+python concatenate_relative_poses.py -s setup.json -r relative_poses.json --dump_images 
+```
+#### Bundle adjustment:
+Least squares refinement of intrinsic and extrinsic parameters and 3D points. The camera rig is still up to a scale at this point.
+The file `poses.json` is the output of the previous step.
+```
+python bundle_adjustment.py -s setup.json -i intrinsics.json -e poses.json -l landmarks.json -f filenames.json --dump_images  
+```
+#### Transformation to global reference system:
+
+## Input files
+```json
+{
+ "views": [ "cam0", "cam1", "cam2", "cam3"], 
+ "minimal_tree": [["cam0","cam1"], ["cam1","cam2"], ["cam3","cam0"]]
+}
+```
+The file `landmarks.json` contains the points used to compute the poses. Each landmark has an associated timestamp. This defines a time when the landmark is visible. If the same landmark is visible in other views the same timestamp should be used. Multiple landmarks can have the same timestamp. 
+```json
+{
+ "cam0":{landmarks": [[530.1256, 877.56], [2145.5564, 987.4574], ..., [1023, 126]], 
+         "timestamp": [0, 0, ..., 3040]},
+ ...
+ "cam3":{landmarks": [[430.1256, 377.56], [2245.5564, 387.4574], ..., [2223, 1726]], 
+         "timestamp": [0, 0, ..., 3040]}         
+}
+```
+The file `intrinsics.json` contains the instrinsics parameters in the following format:
+```json
+{
+ "cam0": { "K": [[1798.760123221333, 0.0, 1947.1889719803005], 
+                  [0.0, 1790.0624403935456, 1091.2910152343356],
+                  [ 0.0, 0.0, 1.0]],
+            "dist": [-0.22790810,0.0574260,0.00032600,-0.00047905,-0.0068488]},
+ ...           
+ "cam3": { "K": [[1778.560123221333, 0.0, 1887.1889719803005], 
+                  [0.0, 1780.0624403935456, 1081.2910152343356],
+                  [ 0.0, 0.0, 1.0]],
+            "dist": [-0.2390810,0.0554260,0.00031600,-0.00041905,-0.0062488]}
+}
+```
+The file `filenames.json` contains one filename for each view. It is used for visualisation purposes only:
+```json
+{
+ "cam0": "somewhere/filename_cam0.jpg",
+ ...           
+ "cam3": "somewhere/filename_cam3.jpg",
+}
+```
+## License
+
