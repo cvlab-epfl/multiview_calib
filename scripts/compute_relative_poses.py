@@ -83,8 +83,8 @@ def main(setup='setup.json',
             plt.title(str(view2))
             plt.show()
             '''
-            utils.mkdir("output")
-            imageio.imsave("output/{}_{}.jpg".format(view1, view2), np.hstack([img1_,img2_]))
+            utils.mkdir("output/relative_poses/")
+            imageio.imsave("output/relative_poses/{}_{}.jpg".format(view1, view2), np.hstack([img1_,img2_]))
             
     utils.json_write("relative_poses.json", relative_poses)
     

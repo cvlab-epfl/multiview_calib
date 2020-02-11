@@ -16,9 +16,9 @@ export PYTHONPATH="...parent folder...:$PYTHONPATH"
 ## Usage
 
 #### Compute intrinsic parameters:
-Shoot a video or take pictures of the checkerboard from multiple position making sure the checkerboard covers the whole field of view. The checkerboard has to right on the edges of the image plane!
+Take a video or pictures of the checkerboard from multiple positions. Make sure the checkerboard goes right on the edges of the image plane!
 https://markhedleyjones.com/storage/checkerboards/Checkerboard-A4-30mm-8x6.pdf
-Make sure the squares measure 30mmx30mm after printing it if not change the printer config.
+One printed on paper, make sure the squares measure 30mmx30mm, if not, remove any autoresizing printer's config.
 
 Extract the frames:
 ```
@@ -28,21 +28,20 @@ Run the following script:
 ```
 python compute_intrinsics.py --folder_images ./frames -ich 6 -icw 8 -s 30 -t 24 --debug
 ```
-The computation is successful if the saved images (the undistorted ones) have been correctly undistorted.
-In case of failure, shoot a new video.
+To understand if the calibration is correct you have to perform a visual inspction of the undistorted images that have been saved. The lines in the images should be straight and the picture has to look like a normal picture. In case of failure update Opencv or re-take the video/pictures.
 
 #### Compute relative poses:
-At this step we compute relative poses between pairs of views. These will then be chained one another to compute the pose of each camera w.r.t the first camera. In order to compute the pose of each camera, we have to manually define a minimal set of pairs of views that connect every camera.
-This is done in the file `setup.json`. The file named `landmarks.json` contains precise image points for each view that are sued to compute fudmanetal matrices and poses. The file `ìntrinsics.json` contains the intrinsic parameter for each view. The file `filenames.json` contains one filename for each view. It is used for visualisation only.
-Check section `Input files` for more details on the format.
+At this step we compute the relative poses between pairs of views. These rigid transformations will then be chained one another to compute the pose of each camera w.r.t the first camera. In order to do so, we have to manually define a minimal set of pairs of views that connect every camera. This is done in the file `setup.json`. 
+The file named `landmarks.json` contains precise image points for each view that are used to compute fundamental matrices and poses. The file `ìntrinsics.json` contains the intrinsic parameters for each view. The file `filenames.json` contains one filename of an image for each view; it is used for visualisation purposes.
+Check section `Input files` for more details on the file formats.
 
 ```
 python compute_relative_poses.py -s setup.json -i intrinsics.json -l landmarks.json -f filenames.json --dump_images 
 ```
-The result of this operation are relative poses from the camera1 to camera2 for each pairs of views. The poses are up to scale or in other words the translation is a unit vector! 
+The result of this operation are relative poses from the first to second camera for each pairs of views. The poses are up to scale, in other words the translation is a unit vector.
 
 #### Concatenate relative poses:
-In this step we concatenate/chain all the relative poses to compute the actual camera poses w.r.t the first caamera. At every concatenation we scale the current relative pose to the previous ones in order to have roughly the same scale for each camera.
+In this step we concatenate/chain all the relative poses to obtain an estimate of the actual camera poses. The poses are defined w.r.t the first camera. At every concatenation we scale the current relative pose to match the scale of the previous ones. This to have roughly the same scale for each camera.
 The file `relative_poses.json` is the output of the previous step.
 ```
 python concatenate_relative_poses.py -s setup.json -r relative_poses.json --dump_images 
@@ -54,8 +53,14 @@ The file `poses.json` is the output of the previous step.
 python bundle_adjustment.py -s setup.json -i intrinsics.json -e poses.json -l landmarks.json -f filenames.json --dump_images  
 ```
 #### Transformation to global reference system:
+Give correspondences between the 3D results of the bundle adjustment and 3D points of the world coordinate system, we compute rotation translation and scale that match the two point sets.
+```
+python global_registration.py -e ba_poses.json -p ba_points.json world_points.json --dump_images  
+```
+The result of this step are the camera poses defined in this new coordinate system.
 
 ## Input files
+The file `setup.json` contains the name of the views and the minimal number of pairs of views that allows to connect all the cameras togheter:
 ```json
 {
  "views": [ "cam0", "cam1", "cam2", "cam3"], 

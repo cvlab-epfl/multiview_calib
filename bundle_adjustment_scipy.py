@@ -9,7 +9,7 @@ from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 
 from . import utils
-from .singleview_geometry import project_points
+from .singleview_geometry import project_points, undistort_points
 from .twoview_geometry import triangulate
 
 __all__ = ["build_input", "bundle_adjustment", 
@@ -202,16 +202,53 @@ def evaluate(camera_params, points_3d, points_2d,
     
     return residuals
 
-def triangulate_all_pairs(views, landmarks, timestamps, camera_params):
+def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit=5):
 
     n_cameras = len(views)
-    n_samples = len(timestamps)  
+    n_samples = len(timestamps) 
+
+    # to speed things up
+    poses = []
+    landmarks_undist = {}
+    for j in range(n_cameras):
+        K,R,t,dist = unpack_camera_params(camera_params[j])
+        poses.append((K,R,t,dist))
+        
+        points = landmarks[views[j]]['landmarks']
+        landmarks_undist[views[j]] = undistort_points(points, K, dist)
+        
+    '''
+    triang_points = {}
+    for j1, j2 in itertools.combinations(range(n_cameras), 2):
+
+        K1,R1,t1,dist1 = poses[j1]
+        K2,R2,t2,dist2 = poses[j2]
+
+        ps1 = []
+        ps2 = []
+        for i in timestamps:
+            timestamp1 = landmarks[views[j1]]['timestamp']
+            timestamp2 = landmarks[views[j2]]['timestamp']
+            if i in timestamp1 and i in timestamp2:
+                i1 = timestamp1.index(i)
+                i2 = timestamp2.index(i) 
+
+                ps1.append(landmarks_undist[views[j1]][i1])
+                ps2.append(landmarks_undist[views[j2]][i2])
+
+        p3d = triangulate(ps1, ps2, K1, R1, t1, None, K2, R2, t2, None)  
+        triang_points[(j1, j2)] = p3d
+    '''
                      
     points_3d_pairs = []
-    for i in timestamps:                     
+    for i in timestamps:
 
         # find in which view sample i exists
         views_idxs = [j for j in range(n_cameras) if i in landmarks[views[j]]['timestamp']]
+        
+        # we want ot limit the number of possible combinations 
+        # therefore we limit the number of views
+        views_idxs = views_idxs[:view_limit]
 
         if len(views_idxs)<2:
             points_3d_pairs.append(None)
@@ -220,22 +257,24 @@ def triangulate_all_pairs(views, landmarks, timestamps, camera_params):
         points_3d_pairs_ = []
         for j1, j2 in itertools.combinations(views_idxs, 2):
 
-            K1,R1,t1,dist1 = unpack_camera_params(camera_params[j1])
-            K2,R2,t2,dist2 = unpack_camera_params(camera_params[j2])
-            
+            K1,R1,t1,dist1 = poses[j1]
+            K2,R2,t2,dist2 = poses[j2]
+
             i1 = landmarks[views[j1]]['timestamp'].index(i)
             i2 = landmarks[views[j2]]['timestamp'].index(i)            
-
-            p3d = triangulate(landmarks[views[j1]]['landmarks'][i1], 
-                                 landmarks[views[j2]]['landmarks'][i2],
-                                 K1, R1, t1, dist1, K2, R2, t2, dist2)
+            
+            p3d = triangulate(landmarks_undist[views[j1]][i1], 
+                              landmarks_undist[views[j2]][i2],
+                              K1, R1, t1, None, K2, R2, t2, None)
 
             points_3d_pairs_.append(p3d)  
         points_3d_pairs.append(points_3d_pairs_) 
     return points_3d_pairs
-
-def visualisation(views, landmarks, filenames_images, camera_params, points_3d, points_2d, 
+            
+def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, points_2d, 
                   camera_indices, each=1, path=None):
+    
+    views = setup['views']
     
     timestamps = set().union(*[landmarks[view]['timestamp'] for view in views])
     timestamps = list(timestamps)[::each]    
@@ -246,8 +285,8 @@ def visualisation(views, landmarks, filenames_images, camera_params, points_3d, 
     
     for idx_view, view in enumerate(views):    
             
-        K, R, t, dist = unpack_camera_params(camera_params[idx_view])     
-
+        K, R, t, dist = unpack_camera_params(camera_params[idx_view])   
+        
         proj_tri_pairs = project_points(points_3d_tri_chained, K, R, t, dist)
 
         proj = project_points(points_3d, K, R, t, dist)
@@ -258,19 +297,44 @@ def visualisation(views, landmarks, filenames_images, camera_params, points_3d, 
             xmax, ymax = proj.max(axis=0)
             xmax = np.minimum(xmax, 5000)
             ymax = np.minimum(ymax, 3000)
-            image = np.zeros((int(ymax), int(ymax)), np.uint8)   
+            image = np.zeros((int(ymax), int(ymax)), np.uint8)
 
-        plt.figure(figsize=(10,8))
-        plt.plot(proj_tri_pairs[:,0], 
-                 proj_tri_pairs[:,1], 'k.', markersize=1, label='Triang. from pairs')            
-        plt.plot(points_2d[camera_indices==idx_view][:,0], 
-                 points_2d[camera_indices==idx_view][:,1], 'g.', markersize=10, label='Annotations')
-        plt.plot(proj[:,0], proj[:,1], 'r.', markersize=5, label='B.A results')
-        plt.imshow(image)
-        plt.title("{}".format(view))
-        plt.legend()
-        plt.show()
-        if path is not None:
-            utils.mkdir(path)
-            plt.savefig(os.path.join(path, "ba_{}.jpg".format(view)))
+        def plot(p_tri, p_2d, prj, image, name):
+            plt.figure(figsize=(10,8))
+            plt.plot(p_tri[:,0], p_tri[:,1], 'k.', markersize=1, label='Triang. from pairs')            
+            plt.plot(p_2d[:,0], p_2d[:,1], 'g.', markersize=10, label='Annotations')
+            plt.plot(prj[:,0], prj[:,1], 'r.', markersize=5, label='B.A results')
+            plt.imshow(image)
+            plt.title("{}-{}".format(view, name))
+            plt.legend()
+            plt.show()
+            if path is not None:
+                utils.mkdir(path)
+                plt.savefig(os.path.join(path, "ba_{}_{}.jpg".format(view, name)))
+                
+        plot(proj_tri_pairs, 
+             points_2d[camera_indices==idx_view], 
+             proj, 
+             image, 
+             "original")
             
+        plot(undistort_points(proj_tri_pairs, K, dist), 
+             undistort_points(points_2d[camera_indices==idx_view], K, dist),
+             undistort_points(proj, K, dist),
+             cv2.undistort(image, K, dist, None, K), 
+             "undistorted")    
+        
+    # ------------ for 3D visualisation -----------   
+    poses = {}
+    for idx_view, view in enumerate(views):    
+            
+        K, R, t, dist = unpack_camera_params(camera_params[idx_view])   
+        poses[view] = {"K":K.tolist(), "dist":dist.tolist(), "R":R.tolist(), "t":t.tolist()}
+        
+    triang_points = {}
+    for i, (view1, view2) in enumerate(setup['minimal_tree']):
+        triang_points[(view1, view2)] = {'triang_points':points_3d.tolist()}   
+    
+    from .twoview_geometry import visualise_cameras_and_triangulated_points
+    visualise_cameras_and_triangulated_points(setup, poses, triang_points, 
+                                              max_points=1000, path=path)        

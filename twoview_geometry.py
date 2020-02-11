@@ -209,8 +209,7 @@ def draw_epilines(img1_undistorted, img2_undistorted,
     return img1_, img2_
 
     
-def visualise_cameras_and_triangulated_points(setup, poses, triang_points, max_points=100,
-                                              save=False, folder="dumps"): 
+def visualise_cameras_and_triangulated_points(setup, poses, triang_points, max_points=100, path=None): 
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
     
@@ -265,15 +264,15 @@ def visualise_cameras_and_triangulated_points(setup, poses, triang_points, max_p
 
     plt.show()
     
-    if save:
-        utils.mkdir(folder)
+    if path is not None:
+        utils.mkdir(path)
         ax.view_init(15, 0)
-        plt.savefig(folder+"/cameras_points3d_1.jpg", bbox_inches='tight')
+        plt.savefig(path+"/cameras_points3d_1.jpg", bbox_inches='tight')
         ax.view_init(15, 90)
-        plt.savefig(folder+"/cameras_points3d_2.jpg", bbox_inches='tight')
+        plt.savefig(path+"/cameras_points3d_2.jpg", bbox_inches='tight')
         ax.view_init(15+90, 0)
-        plt.savefig(folder+"/cameras_points3d_3.jpg", bbox_inches='tight')
+        plt.savefig(path+"/cameras_points3d_3.jpg", bbox_inches='tight')
         ax.view_init(15+90, 90)
-        plt.savefig(folder+"/cameras_points3d_4.jpg", bbox_inches='tight')
+        plt.savefig(path+"/cameras_points3d_4.jpg", bbox_inches='tight')
         ax.view_init(20, -125)
-        plt.savefig(folder+"/cameras_points3d_5.jpg", bbox_inches='tight')
+        plt.savefig(path+"/cameras_points3d_5.jpg", bbox_inches='tight')

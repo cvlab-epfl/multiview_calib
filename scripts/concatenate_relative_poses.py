@@ -119,8 +119,9 @@ def main(setup='setup.json',
 
         pairs = unmatched_pairs[:]
         
+    path = "output/relative_poses" if dump_images else None
     visualise_cameras_and_triangulated_points(setup, poses, triang_points, max_points=100,
-                                              save=dump_images, folder="output")        
+                                              path=path)        
             
     utils.json_write("poses.json", poses)   
     triang_points = utils.dict_keys_to_string(triang_points)

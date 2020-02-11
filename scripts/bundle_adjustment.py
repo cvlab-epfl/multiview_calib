@@ -3,6 +3,7 @@ import argparse
 import matplotlib
 import matplotlib.pyplot as plt
 import imageio
+import time
 import cv2
 import os
 
@@ -17,15 +18,15 @@ __config__ = {
     "each_visualisation":1, # to use less datatpoints in the visualisation
     "optimize_camera_params":True, 
     "optimize_points":True, 
-    "ftol":1e-14,
-    "xtol":1e-14,
-    "max_nfev":30, # first optimization
-    "max_nfev2":50,# second optimization after outlier removal
+    "ftol":1e-8,
+    "xtol":1e-8,
+    "max_nfev":40, # first optimization
+    "max_nfev2":80,# second optimization after outlier removal
     "bounds":True, 
     "bounds_cp":[0.15]*6+[200,200,200,200]+[0.1,0.1,0,0,0],
     "bounds_pt":[100]*3,
     "th_outliers":20, # value in pixels defining a point to be an outlier. If None, do not remove outliers.
-    "output_path": "output"
+    "output_path": "output/bundle_adjustment/"
 }
 
 def main(setup='setup.json',
@@ -33,7 +34,12 @@ def main(setup='setup.json',
          extrinsics='poses.json',
          landmarks='landmarks.json',
          filenames='filenames.json',
+         iter1=40,
+         iter2=80,
          dump_images=True):
+    
+    __config__["max_nfev"] = iter1
+    __config__["max_nfev2"] = iter2    
     
     if dump_images:
         utils.mkdir(__config__["output_path"])
@@ -53,10 +59,13 @@ def main(setup='setup.json',
     else:
         print("Subsampling the landmarks to 1 every {}.".format(__config__["each_training"]))    
 
+    print("Preparing the input data...")
+    start = time.time()
     camera_params, points_3d, points_2d,\
     camera_indices, point_indices, \
     n_cameras, n_points, timestamps = build_input(views, intrinsics, extrinsics, 
                                                   landmarks, each=__config__["each_training"])
+    print(time.time()-start)
     print("Sizes:")
     print("\t camera_params:", camera_params.shape)
     print("\t points_3d:", points_3d.shape)
@@ -165,7 +174,7 @@ def main(setup='setup.json',
         print("Subsampling the annotations to visualise to 1 every {}.".format(__config__["each_visualisation"]))    
         
     path = __config__['output_path'] if dump_images else None
-    visualisation(views, landmarks, filenames_images, 
+    visualisation(setup, landmarks, filenames_images, 
                   new_camera_params, new_points_3d, 
                   points_2d, camera_indices, each=__config__["each_visualisation"], path=path)
 
@@ -203,6 +212,11 @@ if __name__ == "__main__":
 
     parser.add_argument("--dump_images", "-d", default=False, const=True, action='store_const',
                         help='Saves images for visualisation') 
+    
+    parser.add_argument("--iter1", "-it1", type=int, required=False, default=40,
+                        help='Maximum number of iterations of the first optimization')
+    parser.add_argument("--iter2", "-it2", type=int, required=False, default=80,
+                        help='Maximum number of iterations of the second optimization after outlier rejection')     
     
     args = parser.parse_args()
 
