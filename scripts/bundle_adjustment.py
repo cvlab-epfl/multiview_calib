@@ -18,8 +18,8 @@ __config__ = {
     "each_visualisation":1, # to use less datatpoints in the visualisation
     "optimize_camera_params":True, 
     "optimize_points":True, 
-    "ftol":1e-8,
-    "xtol":1e-8,
+    "ftol":1e-6,
+    "xtol":1e-6,
     "max_nfev":40, # first optimization
     "max_nfev2":80,# second optimization after outlier removal
     "bounds":True, 
@@ -59,12 +59,13 @@ def main(setup='setup.json',
     else:
         print("Subsampling the landmarks to 1 every {}.".format(__config__["each_training"]))    
 
-    print("Preparing the input data...")
+    print("Preparing the input data...(this can take a while depending on the number of points to triangulate)")
     start = time.time()
     camera_params, points_3d, points_2d,\
     camera_indices, point_indices, \
     n_cameras, n_points, timestamps = build_input(views, intrinsics, extrinsics, 
-                                                  landmarks, each=__config__["each_training"])
+                                                  landmarks, each=__config__["each_training"], 
+                                                  view_limit_triang=4)
     print(time.time()-start)
     print("Sizes:")
     print("\t camera_params:", camera_params.shape)
@@ -93,14 +94,32 @@ def main(setup='setup.json',
     else:
         print("Unbounded optimization.")
         
-    print("Least-Squares parameters:")
-    print("\t optimize camera parameters: {}".format(__config__["optimize_camera_params"]))
-    print("\t optimize 3d points: {}".format(__config__["optimize_points"])) 
+    print("Least-Squares optimization of the 3D points:")
+    print("\t optimize camera parameters: {}".format(False))
+    print("\t optimize 3d points: {}".format(True))
     print("\t ftol={:0.3e}".format(__config__["ftol"]))
     print("\t xtol={:0.3e}".format(__config__["xtol"]))
     print("\t max_nfev={}".format(__config__["max_nfev"]))    
         
-    new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
+    points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
+                                     point_indices, n_cameras, n_points, 
+                                     optimize_camera_params=False, 
+                                     optimize_points=True, 
+                                     ftol=__config__["ftol"], xtol=__config__["xtol"],
+                                     max_nfev=__config__["max_nfev"], 
+                                     bounds=__config__["bounds"], 
+                                     bounds_cp = __config__["bounds_cp"],
+                                     bounds_pt = __config__["bounds_pt"], 
+                                     verbose=True, eps=1e-12)        
+        
+    print("Least-Squares optimization of 3D points and camera parameters:")
+    print("\t optimize camera parameters: {}".format(True))
+    print("\t optimize 3d points: {}".format(True)) 
+    print("\t ftol={:0.3e}".format(__config__["ftol"]))
+    print("\t xtol={:0.3e}".format(__config__["xtol"]))
+    print("\t max_nfev={}".format(__config__["max_nfev"]))    
+        
+    new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
                                                          point_indices, n_cameras, n_points, 
                                                          optimize_camera_params=__config__["optimize_camera_params"], 
                                                          optimize_points=__config__["optimize_points"], 
@@ -145,7 +164,7 @@ def main(setup='setup.json',
         print("\t\t points_3d:", points_3d.shape)
         print("\t\t points_2d:", points_2d.shape)
         
-        new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
+        new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
                                                              point_indices, n_cameras, n_points, 
                                                              optimize_camera_params=__config__["optimize_camera_params"], 
                                                              optimize_points=__config__["optimize_points"], 

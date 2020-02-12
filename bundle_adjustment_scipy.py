@@ -87,7 +87,7 @@ def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indice
 
     return A
 
-def build_input(views, intrinsics, extrinsics, landmarks, each=1):
+def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_triang=2):
 
     timestamps = set().union(*[landmarks[view]['timestamp'] for view in views])
     timestamps = np.int32(list(timestamps)[::each])
@@ -99,7 +99,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1):
     camera_params = np.float64(camera_params)
 
     # triangulate 3D positions from all possible pair of views
-    points_3d_pairs = triangulate_all_pairs(views, landmarks, timestamps, camera_params)
+    points_3d_pairs = triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang)
 
     points_3d = []
     points_2d = []
@@ -202,7 +202,7 @@ def evaluate(camera_params, points_3d, points_2d,
     
     return residuals
 
-def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit=5):
+def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang=5):
 
     n_cameras = len(views)
     n_samples = len(timestamps) 
@@ -246,9 +246,11 @@ def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limi
         # find in which view sample i exists
         views_idxs = [j for j in range(n_cameras) if i in landmarks[views[j]]['timestamp']]
         
-        # we want ot limit the number of possible combinations 
-        # therefore we limit the number of views
-        views_idxs = views_idxs[:view_limit]
+        # to estimate the 3D points we average the triangulations of 
+        # multiple combinations of views. IF many cameras are used this might 
+        # require a lot of time. TO limit the computational complexity
+        # we limit here the number of views that are taken for the trinagulations
+        views_idxs = views_idxs[:view_limit_triang]
 
         if len(views_idxs)<2:
             points_3d_pairs.append(None)
