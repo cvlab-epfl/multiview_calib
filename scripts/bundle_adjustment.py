@@ -44,11 +44,11 @@ def main(setup='setup.json',
     if dump_images:
         utils.mkdir(__config__["output_path"])
 
-    setup = utils.json_read("setup.json")
-    intrinsics = utils.json_read("intrinsics.json")
-    extrinsics = utils.json_read("poses.json")
-    landmarks = utils.json_read("landmarks.json")
-    filenames_images = utils.json_read("filenames.json")
+    setup = utils.json_read(setup)
+    intrinsics = utils.json_read(intrinsics)
+    extrinsics = utils.json_read(extrinsics)
+    landmarks = utils.json_read(landmarks)
+    filenames_images = utils.json_read(filenames)
 
     views = setup['views']
     print("-"*20)
