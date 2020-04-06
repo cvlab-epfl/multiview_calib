@@ -14,7 +14,7 @@ from .twoview_geometry import triangulate
 
 __all__ = ["build_input", "bundle_adjustment", 
            "evaluate", "triangulate_all_pairs", "pack_camera_params", "unpack_camera_params",
-           "visualisation"]
+           "visualisation", "error_measure"]
 
 def unpack_camera_params(camera_params, rotation_matrix=True):
 
@@ -339,4 +339,25 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     
     from .twoview_geometry import visualise_cameras_and_triangulated_points
     visualise_cameras_and_triangulated_points(setup, poses, triang_points, 
-                                              max_points=1000, path=path)        
+                                              max_points=1000, path=path) 
+    
+def error_measure(setup, landmarks, ba_poses, ba_points, scale=1, view_limit_triang=5):
+    
+    views = setup['views']
+
+    timestamps = ba_points['timestamp']
+    points_3d = ba_points['points_3d']
+
+    camera_params = []
+    for view in views:
+        camera_params.append(pack_camera_params(**ba_poses[view]))
+
+    points_3d_tri = triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang=5)  
+
+    avg_dists = []
+    for p3d, tri in zip(points_3d, points_3d_tri):
+
+        dist = np.linalg.norm(np.reshape(p3d,(1,3))-np.reshape(tri,(-1,3)), axis=1)*scale
+        avg_dists.append(dist.mean())   
+
+    return np.mean(avg_dists), np.std(avg_dists), np.median(avg_dists)
