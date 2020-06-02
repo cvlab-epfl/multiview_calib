@@ -25,6 +25,7 @@ __config__ = {
     "bounds":True, 
     "bounds_cp":[0.15]*6+[200,200,200,200]+[0.1,0.1,0,0,0],
     "bounds_pt":[100]*3,
+    "th_outliers_early":200,
     "th_outliers":20, # value in pixels defining a point to be an outlier. If None, do not remove outliers.
     "output_path": "output/bundle_adjustment/"
 }
@@ -77,17 +78,50 @@ def main(config=None,
     print("\t camera_params:", camera_params.shape)
     print("\t points_3d:", points_3d.shape)
     print("\t points_2d:", points_2d.shape)
+    
+    f0 = evaluate(camera_params, points_3d, points_2d,
+                  camera_indices, point_indices,
+                  n_cameras, n_points)    
 
     if dump_images:
-        f0 = evaluate(camera_params, points_3d, points_2d,
-                      camera_indices, point_indices,
-                      n_cameras, n_points)
         
         plt.figure()
         plt.plot(f0)
         plt.title("Residuals at initialization")
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "initial_residuals.jpg"), bbox_inches='tight')
+        
+        
+    if __config__["th_outliers_early"]==0 or __config__["th_outliers_early"] is None:
+        print("No early outlier rejection.")
+    else:
+        print("Early Outlier rejection:")
+        print("\t threshold outliers: {}".format(__config__["th_outliers_early"])) 
+        
+        f0_ = np.abs(f0.reshape(-1,2))
+        mask_outliers = np.logical_or(f0_[:,0]>__config__["th_outliers_early"],f0_[:,1]>__config__["th_outliers_early"])
+        point_indices = point_indices[~mask_outliers]
+        camera_indices = camera_indices[~mask_outliers]
+        points_2d = points_2d[~mask_outliers]
+        optimized_points = np.int32(list(set(point_indices)))
+        print("\t [Early rejection] Number of points considered outliers: ", sum(mask_outliers))
+
+        if sum(mask_outliers)/len(mask_outliers)>0.5:
+            print("!"*20)
+            print("[Early rejection] More than half of the data points have been considered outliers! Something may have gone wrong.")
+            print("!"*20)         
+        
+    if dump_images:
+        
+        f01 = evaluate(camera_params, points_3d, points_2d,
+                      camera_indices, point_indices,
+                      n_cameras, n_points)         
+        
+        plt.figure()
+        plt.plot(f01)
+        plt.title("Residuals after early outlier rejection")
+        plt.show()
+        plt.savefig(os.path.join(__config__["output_path"], "early_outlier_rejection_residuals.jpg"), bbox_inches='tight')        
         
     if __config__["bounds"]:
         print("Bounded optimization:")

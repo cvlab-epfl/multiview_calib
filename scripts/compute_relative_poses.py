@@ -45,10 +45,15 @@ def main(setup='setup.json',
         dist1 = np.float64(intrinsics[view1]['dist'])
         dist2 = np.float64(intrinsics[view2]['dist'])
 
-        Rd, td, F, pts1_undist, pts2_undist, tri = compute_relative_pose(pts1, pts2,
-                                                                         K1=K1, dist1=dist1,
-                                                                         K2=K2, dist2=dist2, 
-                                                                         method=method, th=th)
+        try:
+            Rd, td, F, pts1_undist, pts2_undist, tri = compute_relative_pose(pts1, pts2,
+                                                                             K1=K1, dist1=dist1,
+                                                                             K2=K2, dist2=dist2, 
+                                                                             method=method, th=th)
+        except:
+            print("---------------> Exception: {},{}".format(view1, view2))
+            raise
+            
         print("Pair {}:".format([view1, view2]))
         print("\t Fundmanetal matrix:\n\t\t{}\n\t\t{}\n\t\t{}".format(F[0],F[1],F[2]))
         print("\t Right camera position:\n\t\t{}".format(utils.invert_Rt(Rd, td)[1].ravel()))
@@ -84,7 +89,9 @@ def main(setup='setup.json',
             plt.show()
             '''
             utils.mkdir("output/relative_poses/")
-            imageio.imsave("output/relative_poses/{}_{}.jpg".format(view1, view2), np.hstack([img1_,img2_]))
+            
+            hmin = np.minimum(img1_.shape[0], img2_.shape[0])
+            imageio.imsave("output/relative_poses/{}_{}.jpg".format(view1, view2), np.hstack([img1_[:hmin],img2_[:hmin]]))
             
     utils.json_write("relative_poses.json", relative_poses)
     
