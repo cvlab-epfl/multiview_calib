@@ -78,16 +78,7 @@ def main(setup='setup.json',
             np.random.shuffle(idx)
             img1_, img2_ = draw_epilines(img1_undist, img2_undist, pts1_undist[idx[:50]], pts2_undist[idx[:50]],
                                          F, None, linewidth=2, markersize=20)
-            '''
-            plt.figure()
-            plt.subplot(1,2,1)
-            plt.imshow(img1_)
-            plt.title(str(view1))
-            plt.subplot(1,2,2)
-            plt.imshow(img2_)
-            plt.title(str(view2))
-            plt.show()
-            '''
+
             utils.mkdir("output/relative_poses/")
             
             hmin = np.minimum(img1_.shape[0], img2_.shape[0])

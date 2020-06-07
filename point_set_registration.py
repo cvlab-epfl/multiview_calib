@@ -16,7 +16,7 @@ def estimate_scale_point_sets(src, dst, max_est=50000):
         if i>max_est:
             break
         
-    return np.median(scales)
+    return np.median(scales), np.std(scales)
 
 def procrustes_registration(src, dst):
     """

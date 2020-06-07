@@ -144,7 +144,7 @@ def recover_pose(E, K1, K2, pts1_undist, pts2_undist):
 def compute_relative_pose(pts1, pts2, K1, dist1, K2=None, dist2=None, method='8point', th=0.1):
     
     if len(pts1)<8 or len(pts2)<8:
-        raise ValueError("The algorithm need at least 8 points!")
+        raise ValueError("The algorithm needs at least 8 points!")
     
     if K2 is None:
         K2 = K1

@@ -18,14 +18,14 @@ __config__ = {
     "each_visualisation":1, # to use less datatpoints in the visualisation
     "optimize_camera_params":True, 
     "optimize_points":True, 
-    "ftol":1e-6,
-    "xtol":1e-6,
-    "max_nfev":40, # first optimization
-    "max_nfev2":80,# second optimization after outlier removal
+    "ftol":1e-8,
+    "xtol":1e-8,
+    "max_nfev":200, # first optimization
+    "max_nfev2":200,# second optimization after outlier removal
     "bounds":True, 
-    "bounds_cp":[0.15]*6+[200,200,200,200]+[0.1,0.1,0,0,0],
+    "bounds_cp":[0.3]*6+[10,10,10,10]+[0,0,0,0,0],
     "bounds_pt":[100]*3,
-    "th_outliers":20, # value in pixels defining a point to be an outlier. If None, do not remove outliers.
+    "th_outliers":50, # value in pixels defining a point to be an outlier. If None, do not remove outliers.
     "output_path": "output/bundle_adjustment/"
 }
 

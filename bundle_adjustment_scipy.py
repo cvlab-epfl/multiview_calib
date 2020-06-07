@@ -141,7 +141,7 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
                       camera_indices, point_indices, 
                       n_cameras, n_points, 
                       optimize_camera_params=True, optimize_points=True, 
-                      ftol=1e-15, xtol=1e-15, max_nfev=200, 
+                      ftol=1e-15, xtol=1e-15, max_nfev=200, loss='linear', f_scale=1, 
                       verbose=True, eps=1e-12, bounds=True, 
                       bounds_cp = [0.15]*6+[200,200,200,200]+[0.1,0.1,0,0,0],
                       bounds_pt = [100]*3):
@@ -176,9 +176,9 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
             print("bounds (-inf, inf)")
         
     res = least_squares(fun, x0, jac='2-point', jac_sparsity=A, verbose=2 if verbose else 0, 
-                        x_scale='jac', loss='linear', ftol=ftol, xtol=xtol, method='trf',
+                        x_scale='jac', loss=loss, f_scale=f_scale, ftol=ftol, xtol=xtol, method='trf',
                         args=(n_cameras, n_points, camera_indices, point_indices, points_2d),
-                        max_nfev=max_nfev, bounds=bounds)#
+                        max_nfev=max_nfev, bounds=bounds)
     if verbose:
         t1 = time.time()
         print("Optimization took {0:.0f} seconds".format(t1 - t0))
@@ -205,7 +205,7 @@ def evaluate(camera_params, points_3d, points_2d,
 def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang=5):
 
     n_cameras = len(views)
-    n_samples = len(timestamps) 
+    n_samples = len(timestamps)
 
     # to speed things up
     poses = []

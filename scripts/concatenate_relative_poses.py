@@ -88,9 +88,10 @@ def main(setup='setup.json',
 
             # estimate scale between the two pairs
             if method=='cross-ratios':
-                relative_scale = estimate_scale_point_sets(p3d_com, p3d_adj_com)
+                relative_scale, relative_scale_std = estimate_scale_point_sets(p3d_com, p3d_adj_com)
             elif method=='procrustes':
                 relative_scale,_,_,_ = procrustes_registration(p3d_com, p3d_adj_com)
+                _, relative_scale_std = estimate_scale_point_sets(p3d_com, p3d_adj_com)
             else:
                 raise ValueError("Unrecognized method '{}'".format(method))
 
@@ -99,8 +100,16 @@ def main(setup='setup.json',
             t2 = np.dot(Rd, t1)+relative_scale*td   
             
             print("Pair: {}".format(curr_pair))
-            print("\t Relative scale to {}: {:0.3f}".format(adj_pair, relative_scale))
-            print("\t {} new position: {}".format(second_view, utils.invert_Rt(R2, t2)[1].ravel()))    
+            print("\t Relative scale to {}: {:0.3f}+-{:0.3f}".format(adj_pair, relative_scale, relative_scale_std))
+            print("\t {} new position: {}".format(second_view, utils.invert_Rt(R2, t2)[1].ravel()))
+            if relative_scale_std>0.1:
+                print("!"*40)
+                warning_msg = """The standard deviation of the estimated relative scale is high. 
+This may be a sign of difficulties in finding the correct poses and it may 
+result in convergence issues in the bundle adjustment. 
+We suggest changing the position of one between {} cameras in 'minimal_tree' and try again.""".format(curr_pair)
+                print(warning_msg)
+                print("!"*40)
 
             # transform the triangulated points of the current pair to the origin
             if inverse:
