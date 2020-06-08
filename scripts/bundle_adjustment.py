@@ -6,6 +6,8 @@ import imageio
 import time
 import cv2
 import os
+import warnings
+warnings.filterwarnings("ignore")
 
 matplotlib.use("Agg")
 

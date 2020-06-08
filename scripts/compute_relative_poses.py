@@ -5,12 +5,9 @@ import matplotlib
 import imageio
 import cv2
 import os
-'''
-matplotlib.use('GTK')
-if os.environ.get('DISPLAY') is None:
-    print("Cannot connect to display.")
-    matplotlib.use('Agg')
-'''
+import warnings
+warnings.filterwarnings("ignore")
+
 from multiview_calib import utils 
 from multiview_calib.twoview_geometry import (compute_relative_pose, residual_error,
                                               sampson_distance, draw_epilines)

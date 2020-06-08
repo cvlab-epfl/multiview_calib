@@ -4,6 +4,8 @@ import matplotlib
 import imageio
 import cv2
 import os
+import warnings
+warnings.filterwarnings("ignore")
 
 matplotlib.use("Agg")
 
@@ -55,13 +57,11 @@ def main(setup='setup.json',
                 if curr_pair not in unmatched_pairs:
                     unmatched_pairs.append(curr_pair)
                 continue
-
+                
             if inverse:
-                first_view = adj_pair[0]
-                second_view = curr_pair[0]
+                first_view, second_view = curr_pair[1], curr_pair[0]
             else:
-                first_view = adj_pair[1]
-                second_view = curr_pair[1]
+                first_view, second_view = curr_pair
 
             # this is the new 0,0,0 point for the current pair
             R1 = np.asarray(poses[first_view]['R'], np.float32)
