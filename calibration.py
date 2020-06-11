@@ -12,6 +12,7 @@ from .singleview_geometry import undistort_points, project_points
 from .twoview_geometry import (compute_relative_pose, residual_error,
                                sampson_distance, draw_epilines, triangulate, fundamental_from_relative_pose)
 from .point_set_registration import (estimate_scale_point_sets, procrustes_registration)
+from .utils import colors as view_colors
 
 def verify_view_tree(view_tree):
     G = nx.DiGraph()
@@ -24,7 +25,11 @@ def verify_view_tree(view_tree):
     except:
         no_cycles_found = True
         
-    return no_cycles_found
+    is_connected = nx.number_connected_components(G.to_undirected())==1
+    
+    is_valid = no_cycles_found and is_connected
+        
+    return is_valid
 
 def _common_landmarks(view1, view2, landmarks):
     
@@ -121,7 +126,7 @@ def compute_relative_poses(view_tree, intrinsics, landmarks,
 
     return relative_poses
     
-def visualise_cameras_and_triangulated_points(minimal_tree, poses, triang_points, 
+def visualise_cameras_and_triangulated_points(views, minimal_tree, poses, triang_points, 
                                               max_points=100, path=None): 
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
@@ -129,10 +134,8 @@ def visualise_cameras_and_triangulated_points(minimal_tree, poses, triang_points
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    colors = ['r', 'b', 'g', 'y', 'k', 'm', 'c']
-
     all_points = []
-    for i, (view1, view2) in enumerate(minimal_tree):
+    for i, (view1, view2) in enumerate(reversed(minimal_tree)):
 
         R1 = np.asarray(poses[view1]['R'], np.float64)
         t1 = np.asarray(poses[view1]['t'], np.float64).reshape(3,1)
@@ -154,14 +157,16 @@ def visualise_cameras_and_triangulated_points(minimal_tree, poses, triang_points
         all_points.append(t2_inv.reshape(1,3))
         all_points.append(points_3d.T)   
 
-        if i<len(colors):
-            color = colors[i]
-        else:
-            color = np.random.rand(3).tolist()
+        color_view1 = view_colors[views.index(view1)]
+        #color_view2 = view_colors[views.index(view2)]
 
-        ax.scatter(points_3d[0], points_3d[1], points_3d[2], c=np.array([color]))
-        ax.scatter(*t1_inv.ravel(), c=np.array([color]), marker='x', s=250)
-        ax.scatter(*t2_inv.ravel(), c=np.array([color]), marker='s', s=100) 
+        ax.scatter(points_3d[0], points_3d[1], points_3d[2], c=np.array([color_view1]))
+        
+        p1 = t1_inv.ravel()
+        p2 = t2_inv.ravel()
+        ax.plot([p1[0],p2[0]], [p1[1],p2[1]], [p1[2],p2[2]], 'k',alpha=1, linewidth=1)
+        ax.scatter(*p1, c=np.array([color_view1]), marker='s', s=120, label=view1)
+        ax.scatter(*p2, c=np.array([color_view1]), marker='x', s=250)
 
     ax.set_xlabel('X Label')
     ax.set_ylabel('Y Label')
@@ -175,6 +180,7 @@ def visualise_cameras_and_triangulated_points(minimal_tree, poses, triang_points
     ax.set_ylim(y_min-0.1*np.abs(y_min), y_max+0.1*np.abs(y_max))
     ax.set_zlim(z_min-0.1*np.abs(z_min), z_max+0.1*np.abs(z_max))
 
+    plt.legend()
     plt.show()
     
     if path is not None:

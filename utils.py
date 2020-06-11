@@ -13,6 +13,10 @@ __all__ = ["json_read", "json_write", "pickle_read", "pickle_write",
            "draw_points", "draw_rectangles", "dict_keys_to_string",
            "dict_keys_from_literal_string"]
 
+colors = [[1,0,0], [0,1,0], [0,0,1], 
+           [0,0,0], [1,1,1], [1,1,0],
+           [1,0,1], [0,1,1]]+[np.random.rand(3).tolist() for _ in range(100)]
+
 def json_read(filename):
     try:
         with open(os.path.abspath(filename)) as f:    

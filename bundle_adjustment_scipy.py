@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from . import utils
 from .singleview_geometry import project_points, undistort_points
 from .twoview_geometry import triangulate
+from .utils import colors as view_colors
 
 __all__ = ["build_input", "bundle_adjustment", 
            "evaluate", "triangulate_all_pairs", "pack_camera_params", "unpack_camera_params",
@@ -285,10 +286,6 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     points_3d_tri_chained = np.vstack([item for sublist in points_3d_tri if sublist is not None 
                                             for item in sublist if item is not None])
     
-    colors = [[1,0,0], [0,1,0], [0,0,1], 
-              [0,0,0], [1,1,1], [1,1,0],
-              [1,0,1], [0,1,1]]+[np.random.rand(3).tolist() for _ in range(100)]
-    
     for idx_view, view in enumerate(views):  
         
         if view in filenames_images:
@@ -313,7 +310,7 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
         cams_positions = []
         cams_names = []
         cams_colors = []
-        for _idx_view, (_view,_color) in enumerate(zip(views, colors)):
+        for _idx_view, (_view,_color) in enumerate(zip(views, view_colors)):
             if _view!=view:
                 _, _R, _t, _ = unpack_camera_params(camera_params[_idx_view])
                 _, cam_pos = utils.invert_Rt(_R, _t)
@@ -365,7 +362,7 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
         triang_points[(view1, view2)] = {'triang_points':points_3d.tolist()}   
     
     from .calibration import visualise_cameras_and_triangulated_points
-    visualise_cameras_and_triangulated_points(setup['minimal_tree'], poses, triang_points, 
+    visualise_cameras_and_triangulated_points(setup['views'], setup['minimal_tree'], poses, triang_points, 
                                               max_points=1000, path=path) 
     
 def error_measure(setup, landmarks, ba_poses, ba_points, scale=1, view_limit_triang=5):

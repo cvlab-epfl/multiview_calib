@@ -27,8 +27,8 @@ def main(setup='setup.json',
     poses, triang_points = concatenate_relative_poses(setup['minimal_tree'], relative_poses, method)
         
     path = "output/relative_poses" if dump_images else None
-    visualise_cameras_and_triangulated_points(setup['minimal_tree'], poses, triang_points, max_points=100,
-                                              path=path)        
+    visualise_cameras_and_triangulated_points(setup['views'], setup['minimal_tree'], poses, triang_points, 
+                                              max_points=100, path=path)        
             
     utils.json_write("poses.json", poses)   
     triang_points = utils.dict_keys_to_string(triang_points)
