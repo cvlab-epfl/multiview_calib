@@ -14,6 +14,7 @@ matplotlib.use("Agg")
 from multiview_calib import utils 
 from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustment, evaluate, 
                                                      visualisation, unpack_camera_params)
+from multiview_calib.singleview_geometry import reprojection_error
 
 __config__ = {
     "each_training":1, # to use less datatpoint during the optimization
@@ -22,11 +23,14 @@ __config__ = {
     "optimize_points":True, 
     "ftol":1e-8,
     "xtol":1e-8,
+    "loss":"linear",
+    "f_scale":1,
     "max_nfev":200, # first optimization
     "max_nfev2":200,# second optimization after outlier removal
     "bounds":True, 
-    "bounds_cp":[0.3]*6+[10,10,10,10]+[0,0,0,0,0],
+    "bounds_cp":[0.3]*3+[1]*3+[10,10,10,10]+[0.01,0.01,0,0,0],
     "bounds_pt":[100]*3,
+    "th_outliers_early":1000,
     "th_outliers":50, # value in pixels defining a point to be an outlier. If None, do not remove outliers.
     "output_path": "output/bundle_adjustment/"
 }
@@ -37,8 +41,8 @@ def main(config=None,
          extrinsics='poses.json',
          landmarks='landmarks.json',
          filenames='filenames.json',
-         iter1=40,
-         iter2=80,
+         iter1=200,
+         iter2=200,
          dump_images=True):
 
     if config is not None:
@@ -79,17 +83,50 @@ def main(config=None,
     print("\t camera_params:", camera_params.shape)
     print("\t points_3d:", points_3d.shape)
     print("\t points_2d:", points_2d.shape)
+    
+    f0 = evaluate(camera_params, points_3d, points_2d,
+                  camera_indices, point_indices,
+                  n_cameras, n_points)    
 
     if dump_images:
-        f0 = evaluate(camera_params, points_3d, points_2d,
-                      camera_indices, point_indices,
-                      n_cameras, n_points)
         
         plt.figure()
         plt.plot(f0)
         plt.title("Residuals at initialization")
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "initial_residuals.jpg"), bbox_inches='tight')
+        
+        
+    if __config__["th_outliers_early"]==0 or __config__["th_outliers_early"] is None:
+        print("No early outlier rejection.")
+    else:
+        print("Early Outlier rejection:")
+        print("\t threshold outliers: {}".format(__config__["th_outliers_early"])) 
+        
+        f0_ = np.abs(f0.reshape(-1,2))
+        mask_outliers = np.logical_or(f0_[:,0]>__config__["th_outliers_early"],f0_[:,1]>__config__["th_outliers_early"])
+        point_indices = point_indices[~mask_outliers]
+        camera_indices = camera_indices[~mask_outliers]
+        points_2d = points_2d[~mask_outliers]
+        optimized_points = np.int32(list(set(point_indices)))
+        print("\t [Early rejection] Number of points considered outliers: ", sum(mask_outliers))
+
+        if sum(mask_outliers)/len(mask_outliers)>0.5:
+            print("!"*20)
+            print("[Early rejection] More than half of the data points have been considered outliers! Something may have gone wrong.")
+            print("!"*20)         
+        
+    if dump_images:
+        
+        f01 = evaluate(camera_params, points_3d, points_2d,
+                      camera_indices, point_indices,
+                      n_cameras, n_points)         
+        
+        plt.figure()
+        plt.plot(f01)
+        plt.title("Residuals after early outlier rejection")
+        plt.show()
+        plt.savefig(os.path.join(__config__["output_path"], "early_outlier_rejection_residuals.jpg"), bbox_inches='tight')        
         
     if __config__["bounds"]:
         print("Bounded optimization:")
@@ -107,13 +144,15 @@ def main(config=None,
     print("\t optimize 3d points: {}".format(True))
     print("\t ftol={:0.3e}".format(__config__["ftol"]))
     print("\t xtol={:0.3e}".format(__config__["xtol"]))
-    print("\t max_nfev={}".format(__config__["max_nfev"]))    
+    print("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
+    print("\t max_nfev={}".format(__config__["max_nfev"]))
         
     points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
                                      point_indices, n_cameras, n_points, 
                                      optimize_camera_params=False, 
                                      optimize_points=True, 
                                      ftol=__config__["ftol"], xtol=__config__["xtol"],
+                                     loss=__config__['loss'], f_scale=__config__['f_scale'],
                                      max_nfev=__config__["max_nfev"], 
                                      bounds=__config__["bounds"], 
                                      bounds_cp = __config__["bounds_cp"],
@@ -125,6 +164,7 @@ def main(config=None,
     print("\t optimize 3d points: {}".format(True)) 
     print("\t ftol={:0.3e}".format(__config__["ftol"]))
     print("\t xtol={:0.3e}".format(__config__["xtol"]))
+    print("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
     print("\t max_nfev={}".format(__config__["max_nfev"]))    
         
     new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
@@ -132,6 +172,7 @@ def main(config=None,
                                                          optimize_camera_params=__config__["optimize_camera_params"], 
                                                          optimize_points=__config__["optimize_points"], 
                                                          ftol=__config__["ftol"], xtol=__config__["xtol"],
+                                                         loss=__config__['loss'], f_scale=__config__['f_scale'],
                                                          max_nfev=__config__["max_nfev"], 
                                                          bounds=__config__["bounds"], 
                                                          bounds_cp = __config__["bounds_cp"],
@@ -144,6 +185,7 @@ def main(config=None,
                   n_cameras, n_points)
 
     avg_abs_res = np.abs(f1).mean()
+    print("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
     if avg_abs_res>50:
         print("!"*20)
         print("The average absolute residual error is higher than 50 pixels ({:0.2f})! Something may have gone wrong.".format(avg_abs_res))
@@ -174,46 +216,67 @@ def main(config=None,
         optimized_points = np.int32(list(set(point_indices)))
         print("\t Number of points considered outliers: ", sum(mask_outliers))
         
-        if sum(mask_outliers)/len(mask_outliers)>0.5:
-            print("!"*20)
-            print("More than half of the data points have been considered outliers! Something may have gone wrong.")
-            print("!"*20)            
-
-        print("\t New sizes:")
-        print("\t\t camera_params:", camera_params.shape)
-        print("\t\t points_3d:", points_3d.shape)
-        print("\t\t points_2d:", points_2d.shape)
+        if sum(mask_outliers)==0:
+            print("\t Exit.")
+        else:
         
-        new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
-                                                             point_indices, n_cameras, n_points, 
-                                                             optimize_camera_params=__config__["optimize_camera_params"], 
-                                                             optimize_points=__config__["optimize_points"], 
-                                                             ftol=__config__["ftol"], xtol=__config__["xtol"],
-                                                             max_nfev=__config__["max_nfev2"], 
-                                                             bounds=__config__["bounds"], 
-                                                             bounds_cp = __config__["bounds_cp"],
-                                                             bounds_pt = __config__["bounds_pt"], 
-                                                             verbose=True, eps=1e-12)
+            if sum(mask_outliers)/len(mask_outliers)>0.5:
+                print("!"*20)
+                print("More than half of the data points have been considered outliers! Something may have gone wrong.")
+                print("!"*20)            
 
-        
-        f2 = evaluate(new_camera_params, new_points_3d, points_2d, 
-                      camera_indices, point_indices, 
-                      n_cameras, n_points)
-            
-        avg_abs_res = np.abs(f2).mean()
-        if avg_abs_res>50:
-            print("!"*20)
-            print("The average absolute residual error (after outlier removal) is higher than 50 pixels ({:0.2f})! Something may have gone wrong.".format(avg_abs_res))
-            print("!"*20)
+            print("\t New sizes:")
+            print("\t\t camera_params:", camera_params.shape)
+            print("\t\t points_3d:", points_3d.shape)
+            print("\t\t points_2d:", points_2d.shape)
 
-        if dump_images:
-            plt.figure()
-            plt.plot(f2)
-            plt.title("Residuals after outlier removal")
-            plt.show()
-            plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_outliers_removal.jpg"),
-                        bbox_inches='tight')
+            new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
+                                                                 point_indices, n_cameras, n_points, 
+                                                                 optimize_camera_params=__config__["optimize_camera_params"], 
+                                                                 optimize_points=__config__["optimize_points"], 
+                                                                 ftol=__config__["ftol"], xtol=__config__["xtol"],
+                                                                 loss=__config__['loss'], f_scale=__config__['f_scale'],
+                                                                 max_nfev=__config__["max_nfev2"], 
+                                                                 bounds=__config__["bounds"], 
+                                                                 bounds_cp = __config__["bounds_cp"],
+                                                                 bounds_pt = __config__["bounds_pt"], 
+                                                                 verbose=True, eps=1e-12)
+
+
+            f2 = evaluate(new_camera_params, new_points_3d, points_2d, 
+                          camera_indices, point_indices, 
+                          n_cameras, n_points)
+
+            avg_abs_res = np.abs(f2).mean()
+            print("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
+            if avg_abs_res>50:
+                print("!"*20)
+                print("The average absolute residual error (after outlier removal) is higher than 50 pixels ({:0.2f})! Something may have gone wrong.".format(avg_abs_res))
+                print("!"*20)
+
+            if dump_images:
+                plt.figure()
+                plt.plot(f2)
+                plt.title("Residuals after outlier removal")
+                plt.show()
+                plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_outliers_removal.jpg"),
+                            bbox_inches='tight')
+
+    print("Reprojection errors (mean+-std pixels):")
+    ba_poses = {}
+    for i,(view, cp) in enumerate(zip(views, new_camera_params)):
+        K, R, t, dist = unpack_camera_params(cp)
+        ba_poses[view] = {"R":R.tolist(), "t":t.tolist(), "K":K.tolist(), "dist":dist.tolist()}
         
+        points3d = new_points_3d[point_indices[camera_indices==i]]
+        points2d = points_2d[camera_indices==i]
+        
+        mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d)
+        print("\t {}: {:0.3f}+-{:0.3f}".format(view, mean_error, std_error))
+        
+    ba_points = {"points_3d": new_points_3d[optimized_points].tolist(), 
+                 "timestamp":np.array(timestamps)[optimized_points].tolist()}  
+    
     if __config__["each_visualisation"]<2 or __config__["each_visualisation"] is None:
         print("Visualise all the annotations.")
     else:
@@ -222,14 +285,7 @@ def main(config=None,
     path = __config__['output_path'] if dump_images else None
     visualisation(setup, landmarks, filenames_images, 
                   new_camera_params, new_points_3d, 
-                  points_2d, camera_indices, each=__config__["each_visualisation"], path=path)
-
-    ba_poses = {}
-    for view, cp in zip(views, new_camera_params):
-        K, R, t, dist = unpack_camera_params(cp)
-        ba_poses[view] = {"R":R.tolist(), "t":t.tolist(), "K":K.tolist(), "dist":dist.tolist()}
-    ba_points = {"points_3d": new_points_3d[optimized_points].tolist(), 
-                 "timestamp":np.array(timestamps)[optimized_points].tolist()}  
+                  points_2d, camera_indices, each=__config__["each_visualisation"], path=path)    
 
     utils.json_write("ba_poses.json", ba_poses)
     utils.json_write("ba_points.json", ba_points)

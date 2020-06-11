@@ -285,13 +285,11 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     points_3d_tri_chained = np.vstack([item for sublist in points_3d_tri if sublist is not None 
                                             for item in sublist if item is not None])
     
-    for idx_view, view in enumerate(views):    
-            
-        K, R, t, dist = unpack_camera_params(camera_params[idx_view])   
-        
-        proj_tri_pairs = project_points(points_3d_tri_chained, K, R, t, dist)
-
-        proj = project_points(points_3d, K, R, t, dist)
+    colors = [[1,0,0], [0,1,0], [0,0,1], 
+              [0,0,0], [1,1,1], [1,1,0],
+              [1,0,1], [0,1,1]]+[np.random.rand(3).tolist() for _ in range(100)]
+    
+    for idx_view, view in enumerate(views):  
         
         if view in filenames_images:
             image = imageio.imread(filenames_images[view])
@@ -299,13 +297,42 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
             xmax, ymax = proj.max(axis=0)
             xmax = np.minimum(xmax, 5000)
             ymax = np.minimum(ymax, 3000)
-            image = np.zeros((int(ymax), int(ymax)), np.uint8)
+            image = np.zeros((int(ymax), int(ymax)), np.uint8)        
+            
+        K, R, t, dist = unpack_camera_params(camera_params[idx_view])   
+        
+        # project the pair-wise trinaglated points
+        proj_tri_pairs, mask_valid = project_points(points_3d_tri_chained, K, R, t, dist)
+        proj_tri_pairs = proj_tri_pairs[mask_valid]
+
+        # project the bundle-adjeastment 3d points
+        proj, mask_valid = project_points(points_3d, K, R, t, dist)
+        proj = proj[mask_valid]
+        
+        # project the camera positions
+        cams_positions = []
+        cams_names = []
+        cams_colors = []
+        for _idx_view, (_view,_color) in enumerate(zip(views, colors)):
+            if _view!=view:
+                _, _R, _t, _ = unpack_camera_params(camera_params[_idx_view])
+                _, cam_pos = utils.invert_Rt(_R, _t)
+                cams_positions.append(cam_pos)
+                cams_names.append(_view)
+                cams_colors.append(_color)
+        proj_cams, mask_valid = project_points(cams_positions, K, R, t, dist, image.shape)
+
+        proj_cams = proj_cams[mask_valid]
+        cams_names = [cams_names[i] for i in range(len(mask_valid)) if mask_valid[i]]
+        cams_colors = [cams_colors[i] for i in range(len(mask_valid)) if mask_valid[i]]
 
         def plot(p_tri, p_2d, prj, image, name):
             plt.figure(figsize=(10,8))
             plt.plot(p_tri[:,0], p_tri[:,1], 'k.', markersize=1, label='Triang. from pairs')            
             plt.plot(p_2d[:,0], p_2d[:,1], 'g.', markersize=10, label='Annotations')
             plt.plot(prj[:,0], prj[:,1], 'r.', markersize=5, label='B.A results')
+            for _p, _name, _color in zip(proj_cams, cams_names, cams_colors):
+                plt.plot(*_p, color=np.array(_color), marker='s', linestyle="", markersize=10, label=_name)  
             plt.imshow(image)
             plt.title("{}-{}".format(view, name))
             plt.legend()
@@ -337,8 +364,8 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     for i, (view1, view2) in enumerate(setup['minimal_tree']):
         triang_points[(view1, view2)] = {'triang_points':points_3d.tolist()}   
     
-    from .twoview_geometry import visualise_cameras_and_triangulated_points
-    visualise_cameras_and_triangulated_points(setup, poses, triang_points, 
+    from .calibration import visualise_cameras_and_triangulated_points
+    visualise_cameras_and_triangulated_points(setup['minimal_tree'], poses, triang_points, 
                                               max_points=1000, path=path) 
     
 def error_measure(setup, landmarks, ba_poses, ba_points, scale=1, view_limit_triang=5):

@@ -40,6 +40,11 @@ python compute_relative_poses.py -s setup.json -i intrinsics.json -l landmarks.j
 ```
 The result of this operation are relative poses from the first to second camera for each pairs of views. The poses are up to scale, in other words the translation is a unit vector.
 
+The following command is an alternative. It computes the final relative pose from view1 to view2 as an average of relative poses computed using N other and different views.
+```
+python compute_relative_poses_robust.py -s setup.json -i intrinsics.json -l landmarks.json -m lmeds -n 5 -f filenames.json --dump_images
+```
+
 #### Concatenate relative poses:
 In this step we concatenate/chain all the relative poses to obtain an estimate of the actual camera poses. The poses are defined w.r.t the first camera. At every concatenation we scale the current relative pose to match the scale of the previous ones. This to have roughly the same scale for each camera.
 The file `relative_poses.json` is the output of the previous step.
@@ -50,7 +55,7 @@ python concatenate_relative_poses.py -s setup.json -r relative_poses.json --dump
 Least squares refinement of intrinsic and extrinsic parameters and 3D points. The camera rig is still up to a scale at this point.
 The file `poses.json` is the output of the previous step.
 ```
-python bundle_adjustment.py -s setup.json -i intrinsics.json -e poses.json -l landmarks.json -f filenames.json --dump_images  
+python bundle_adjustment.py -s setup.json -i intrinsics.json -e poses.json -l landmarks.json -f filenames.json --dump_images -c ba_config.json 
 ```
 #### Transformation to global reference system:
 Give correspondences between the 3D results of the bundle adjustment and 3D points of the world coordinate system, we compute rotation translation and scale that match the two point sets.
@@ -97,6 +102,36 @@ The file `filenames.json` contains one filename for each view. It is used for vi
  "cam0": "somewhere/filename_cam0.jpg",
  ...           
  "cam3": "somewhere/filename_cam3.jpg",
+}
+```
+The file `ba_config.json` contains the configuration for the bundle adjustment. A typical configuration is the following:
+```json
+{
+  "each_training": 1
+  "each_visualisation": 1,
+  "th_outliers_early": 1000.0,
+  "th_outliers": 50,
+  "optimize_points": true,
+  "optimize_camera_params": true,
+  "bounds": true,  
+  "bounds_cp": [ 
+    0.3, 0.3, 0.3,
+    2, 2, 2,
+    10, 10, 10, 10,
+    0.01, 0.01, 0, 0, 0
+  ],
+  "bounds_pt": [
+    1000,
+    1000,
+    1000
+  ],
+  "max_nfev": 200,
+  "max_nfev2": 200,
+  "ftol": 1e-08,
+  "xtol": 1e-08,  
+  "loss": "linear",
+  "f_scale": 1,
+  "output_path": "output/bundle_adjustment/",
 }
 ```
 ## License

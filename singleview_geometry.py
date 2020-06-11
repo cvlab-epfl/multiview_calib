@@ -23,11 +23,32 @@ def undistort_points(points, K, distCoeffs, norm_coord=False):
             p[1] = p[1]*fy + cy
     return points_
 
-def project_points(pts, K, R, t, dist=None):
+def project_points(pts, K, R, t, dist=None, image_shape=None):
     pts_ = np.reshape(pts, (-1,3))
+    
+    proj = np.dot(K, np.dot(R,pts_.T) + t.reshape(3,1))
+    z = proj[2]
+    xy = proj[:2].T/z[:,None]
+    mask_in_front = z > 0  
+    if image_shape is not None:
+        mask_inside = np.logical_and.reduce([xy[:,0]>0, xy[:,0]<image_shape[1],
+                                             xy[:,1]>0, xy[:,1]<image_shape[0]])
+        mask_valid = np.logical_and(mask_in_front, mask_inside)
+    else:
+        mask_valid = mask_in_front
+    
     rvec = cv2.Rodrigues(R)[0]
     proj = cv2.projectPoints(pts_, rvec, t, K, dist)[0].reshape(-1,2)
-    return proj
+
+    return proj, mask_valid
+
+def reprojection_error(R, t, K, dist, points3d, points2d):
+    
+    proj, mask_in_front = project_points(points3d, K, R, t, dist)
+    
+    distances = np.linalg.norm(points2d[mask_in_front]-proj[mask_in_front], axis=1)
+    
+    return distances.mean(), distances.std()
 
 def change_intrinsics(points, K1, K2):
     fx1 = K1[0][0]
