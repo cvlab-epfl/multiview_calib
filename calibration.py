@@ -31,19 +31,28 @@ def verify_view_tree(view_tree):
         
     return is_valid
 
-def _common_landmarks(view1, view2, landmarks):
-    
-    landmarks1 = landmarks[view1]["landmarks"]
-    landmarks2 = landmarks[view2]["landmarks"]
-    timestamps1 = landmarks[view1]["timestamp"]
-    timestamps2 = landmarks[view2]["timestamp"]
+def verify_landmarks(landmarks):
+    for view,val in landmarks.items():
+        if 'ids' not in val:
+            return False, "landmarks file must contain the 'ids'"
+        if 'landmarks' not in val:
+            return False, "landmarks file must contain the 'landmarks'"
+        unique = len(set(val['ids']))==len(val['ids'])
+        if not unique:
+            return False, "landmarks file contains duplicate IDs!" 
+        number = len(val['landmarks'])==len(val['ids'])
+        if not number:
+            return False, "the number of IDs and landmarks in landmark file is not the same!" 
+    return True, ""
 
-    idxs_common = set(timestamps1).intersection(timestamps2)
-
-    pts1 = np.vstack([landmarks1[timestamps1.index(idx)] for idx in idxs_common])
-    pts2 = np.vstack([landmarks2[timestamps2.index(idx)] for idx in idxs_common])
+def _common_landmarks(landmarks1, landmarks2, ids1, ids2):
     
-    return pts1, pts2, idxs_common
+    ids_common = list(set(ids1).intersection(ids2))
+            
+    pts1 = np.vstack([landmarks1[ids1.index(i)] for i in ids_common])
+    pts2 = np.vstack([landmarks2[ids2.index(i)] for i in ids_common])
+    
+    return pts1, pts2, ids_common
 
 def visualise_epilines(view_tree, relative_poses, intrinsics, landmarks, filenames,
                        output_path="output/relative_poses/"):
@@ -62,7 +71,10 @@ def visualise_epilines(view_tree, relative_poses, intrinsics, landmarks, filenam
         img1_undist = cv2.undistort(img1.copy(), K1, dist1, None, K1)
         img2_undist = cv2.undistort(img2.copy(), K2, dist2, None, K2)
         
-        pts1, pts2, idxs_common = _common_landmarks(view1, view2, landmarks)
+        pts1, pts2, _ = _common_landmarks(landmarks[view1]["landmarks"],
+                                          landmarks[view2]["landmarks"],
+                                          landmarks[view1]["ids"],
+                                          landmarks[view2]["ids"])
         
         pts1_undist = undistort_points(pts1, K1, dist1)
         pts2_undist = undistort_points(pts2, K2, dist2)
@@ -104,7 +116,10 @@ def compute_relative_poses(view_tree, intrinsics, landmarks,
     relative_poses = {}
     for view1, view2 in view_tree:       
 
-        pts1, pts2, idxs_common = _common_landmarks(view1, view2, landmarks)
+        pts1, pts2, ids_common = _common_landmarks(landmarks[view1]["landmarks"],
+                                                   landmarks[view2]["landmarks"],
+                                                   landmarks[view1]["ids"],
+                                                   landmarks[view2]["ids"])
         
         K1 = np.float64(intrinsics[view1]['K'])
         K2 = np.float64(intrinsics[view2]['K'])
@@ -122,7 +137,7 @@ def compute_relative_poses(view_tree, intrinsics, landmarks,
 
         relative_poses[(view1, view2)] = {"F":F.tolist(), "Rd":Rd.tolist(), "td":td.tolist(), 
                                           "triang_points":tri.tolist(),
-                                          "timestamps":list(idxs_common)}
+                                          "ids":ids_common}
 
     return relative_poses
     
@@ -196,18 +211,16 @@ def visualise_cameras_and_triangulated_points(views, minimal_tree, poses, triang
         ax.view_init(20, -125)
         plt.savefig(path+"/cameras_points3d_5.jpg", bbox_inches='tight')
         
-def concatenate_relative_poses(minimal_tree, relative_poses, method='procrustes', verbose=2, print_prefix=''):
+def concatenate_relative_poses(minimal_tree, relative_poses, method='cross-ratios', verbose=2, print_prefix=''):
     
     # initialize the graph with the first pair of view
     # The first camera will be the center of our coordinate system for now
     pair0 = tuple(minimal_tree[0])
-    poses = {pair0[0]: {"R":np.eye(3).tolist(), "t":np.zeros((3,1)).tolist(),
-                        'relative_scale':1, 'relative_scale_std':None},
+    poses = {pair0[0]: {"R":np.eye(3).tolist(), "t":np.zeros((3,1)).tolist()},
              pair0[1]: {"R":relative_poses[pair0]['Rd'],
-                        "t":relative_poses[pair0]['td'],
-                        'relative_scale':1, 'relative_scale_std':None}}
+                        "t":relative_poses[pair0]['td']}}
     triang_points = {pair0: {"triang_points":relative_poses[pair0]['triang_points'],
-                             "timestamps":relative_poses[pair0]['timestamps']}}
+                             "ids":relative_poses[pair0]['ids']}}
 
     def find_adjacent_pair(pair):
         adj_pair = None
@@ -253,16 +266,14 @@ def concatenate_relative_poses(minimal_tree, relative_poses, method='procrustes'
 
             # triangulated points of the adjacent pair
             p3d_adj = np.float64(triang_points[adj_pair]['triang_points'])
-            idx_adj = triang_points[adj_pair]['timestamps']
+            ids_adj = triang_points[adj_pair]['ids']
 
             # triangulated points of the current pair
             p3d = np.float64(relative_poses[curr_pair]['triang_points'])
-            idx = relative_poses[curr_pair]['timestamps']
-
+            ids = relative_poses[curr_pair]['ids']
+            
             # find common points
-            idx_common = set(idx_adj).intersection(idx)
-            p3d_adj_com = np.array([p3d_adj[idx_adj.index(i)] for i in idx_common])
-            p3d_com     = np.array([p3d[idx.index(i)] for i in idx_common])
+            p3d_adj_com, p3d_com, _ = _common_landmarks(p3d_adj, p3d, ids_adj, ids)                      
 
             # estimate scale between the two pairs
             if method=='cross-ratios':
@@ -279,7 +290,7 @@ def concatenate_relative_poses(minimal_tree, relative_poses, method='procrustes'
             
             if verbose>0:
                 print("{}Concatenating relative poses for pair: {}".format(print_prefix, curr_pair))
-                print("{}\t Relative scale to {}: {:0.3f}+-{:0.3f}".format(print_prefix, adj_pair, relative_scale, relative_scale_std))
+                print("{}\t Relative scale to {} n_points={}: {:0.3f}+-{:0.3f}".format(print_prefix, adj_pair, len(p3d_com), relative_scale, relative_scale_std))
                 print("{}\t {} new position: {}".format(print_prefix, second_view, utils.invert_Rt(R2, t2)[1].ravel()))
                 
             if relative_scale<0.1:
@@ -293,11 +304,9 @@ def concatenate_relative_poses(minimal_tree, relative_poses, method='procrustes'
                 
             p3d = np.dot(R_inv, np.float64(p3d).T*relative_scale)+np.reshape(t_inv, (3,1))
 
-            poses[second_view] = {'R':R2.tolist(), 't':t2.tolist(),
-                                  'relative_scale':relative_scale, 
-                                  'relative_scale_std':relative_scale_std}
+            poses[second_view] = {'R':R2.tolist(), 't':t2.tolist()}
             triang_points[curr_pair] = {'triang_points':p3d.T.tolist(),
-                                        "timestamps":idx}
+                                        "ids":ids}
 
         if len(pairs)==len(unmatched_pairs):
             raise RuntimeError("The following pairs are not connected to the rest of the network: {}".format(unmatched_pairs))
@@ -312,15 +321,17 @@ def build_view_graph(views, landmarks):
     G = nx.Graph()
     G.add_nodes_from(views)
     for view1, view2 in itertools.combinations(views, 2):
-        t1 = landmarks[view1]['timestamp']
-        t2 = landmarks[view2]['timestamp']
 
-        intersection = set(t1).intersection(t2)
+        pts1, pts2, _ = _common_landmarks(landmarks[view1]["landmarks"],
+                                          landmarks[view2]["landmarks"],
+                                          landmarks[view1]["ids"],
+                                          landmarks[view2]["ids"])
+        n_points = len(pts1)
 
-        # checking if th epair of view has the minimum number 
+        # checking if the pair of view has the minimum number 
         # of points for computing the fundamental matrix
-        if len(intersection)>8:
-            G.add_edge(view1, view2, n_points=len(intersection))   
+        if n_points>=8:
+            G.add_edge(view1, view2, n_points=n_points)   
             
     return G
 
@@ -377,7 +388,10 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
         Rd = np.mean(relative_pose_robust['Rd'], 0)
         td = np.mean(relative_pose_robust['td'], 0)
         
-        pts1, pts2, idxs_common = _common_landmarks(view1, view2, landmarks)
+        pts1, pts2, ids_common = _common_landmarks(landmarks[view1]["landmarks"],
+                                                   landmarks[view2]["landmarks"],
+                                                   landmarks[view1]["ids"],
+                                                   landmarks[view2]["ids"])
         
         K1 = np.float64(intrinsics[view1]['K'])
         K2 = np.float64(intrinsics[view2]['K'])
@@ -397,7 +411,7 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
                                           'Rd':Rd.tolist(),
                                           'td':td.tolist(),
                                           'triang_points':tri.tolist(),
-                                          'timestamps':list(idxs_common)}  
+                                          'ids':ids_common}  
         if verbose>0:
             print("Final relative pose:")
         _print_relative_pose_info(F, Rd, td, pts1_undist, pts2_undist, verbose, '')

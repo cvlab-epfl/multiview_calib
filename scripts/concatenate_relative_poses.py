@@ -10,7 +10,8 @@ warnings.filterwarnings("ignore")
 matplotlib.use("Agg")
 
 from multiview_calib import utils
-from multiview_calib.calibration import concatenate_relative_poses, visualise_cameras_and_triangulated_points, verify_view_tree
+from multiview_calib.calibration import (concatenate_relative_poses, visualise_cameras_and_triangulated_points, 
+                                            verify_view_tree)
 
 def main(setup='setup.json',
          relative_poses='relative_poses.json',
@@ -22,7 +23,7 @@ def main(setup='setup.json',
     relative_poses = utils.dict_keys_from_literal_string(relative_poses)
     
     if not verify_view_tree(setup['minimal_tree']):
-        raise ValueError("minimal_tree is not a valid tree!")    
+        raise ValueError("minimal_tree is not a valid tree!")         
     
     poses, triang_points = concatenate_relative_poses(setup['minimal_tree'], relative_poses, method)
         

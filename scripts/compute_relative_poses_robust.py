@@ -10,7 +10,8 @@ warnings.filterwarnings("ignore")
 matplotlib.use("Agg")
 
 from multiview_calib import utils
-from multiview_calib.calibration import compute_relative_poses_robust, visualise_epilines, verify_view_tree
+from multiview_calib.calibration import (compute_relative_poses_robust, visualise_epilines, 
+                                            verify_view_tree, verify_landmarks)
 
 def main(setup='setup.json',
          intrinsics='intrinsics.json',
@@ -27,7 +28,11 @@ def main(setup='setup.json',
     landmarks = utils.json_read(landmarks) 
     
     if not verify_view_tree(setup['minimal_tree']):
-        raise ValueError("minimal_tree is not a valid tree!")    
+        raise ValueError("minimal_tree is not a valid tree!")
+        
+    res, msg = verify_landmarks(landmarks)
+    if not res:
+        raise ValueError(msg)        
     
     relative_poses = compute_relative_poses_robust(setup['views'], setup['minimal_tree'], intrinsics, 
                                                    landmarks, method=method, th=th, max_paths=max_paths,

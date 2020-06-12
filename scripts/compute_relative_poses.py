@@ -9,7 +9,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from multiview_calib import utils 
-from multiview_calib.calibration import compute_relative_poses, visualise_epilines, verify_view_tree
+from multiview_calib.calibration import (compute_relative_poses, visualise_epilines, 
+                                            verify_view_tree, verify_landmarks)
 
 def main(setup='setup.json',
          intrinsics='intrinsics.json',
@@ -25,6 +26,10 @@ def main(setup='setup.json',
     
     if not verify_view_tree(setup['minimal_tree']):
         raise ValueError("minimal_tree is not a valid tree!")
+        
+    res, msg = verify_landmarks(landmarks)
+    if not res:
+        raise ValueError(msg)        
     
     relative_poses = compute_relative_poses(setup['minimal_tree'], intrinsics, landmarks,
                                             method, th, verbose=2)

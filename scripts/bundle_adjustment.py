@@ -15,6 +15,7 @@ from multiview_calib import utils
 from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustment, evaluate, 
                                                      visualisation, unpack_camera_params)
 from multiview_calib.singleview_geometry import reprojection_error
+from multiview_calib.calibration import verify_view_tree, verify_landmarks
 
 __config__ = {
     "each_training":1, # to use less datatpoint during the optimization
@@ -61,6 +62,13 @@ def main(config=None,
     extrinsics = utils.json_read(extrinsics)
     landmarks = utils.json_read(landmarks)
     filenames_images = utils.json_read(filenames)
+    
+    if not verify_view_tree(setup['minimal_tree']):
+        raise ValueError("minimal_tree is not a valid tree!")  
+        
+    res, msg = verify_landmarks(landmarks)
+    if not res:
+        raise ValueError(msg)    
 
     views = setup['views']
     print("-"*20)
@@ -75,10 +83,10 @@ def main(config=None,
     start = time.time()
     camera_params, points_3d, points_2d,\
     camera_indices, point_indices, \
-    n_cameras, n_points, timestamps = build_input(views, intrinsics, extrinsics, 
-                                                  landmarks, each=__config__["each_training"], 
-                                                  view_limit_triang=4)
-    print(time.time()-start)
+    n_cameras, n_points, ids = build_input(views, intrinsics, extrinsics, 
+                                           landmarks, each=__config__["each_training"], 
+                                           view_limit_triang=4)
+    print("The preparation of the input data took: {:0.2f}s".format(time.time()-start))
     print("Sizes:")
     print("\t camera_params:", camera_params.shape)
     print("\t points_3d:", points_3d.shape)
@@ -93,6 +101,8 @@ def main(config=None,
         plt.figure()
         plt.plot(f0)
         plt.title("Residuals at initialization")
+        plt.ylabel("Residual [pixels]")
+        plt.xlabel("X and Y coordinates")
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "initial_residuals.jpg"), bbox_inches='tight')
         
@@ -109,11 +119,11 @@ def main(config=None,
         camera_indices = camera_indices[~mask_outliers]
         points_2d = points_2d[~mask_outliers]
         optimized_points = np.int32(list(set(point_indices)))
-        print("\t [Early rejection] Number of points considered outliers: ", sum(mask_outliers))
+        print("\t Number of points considered outliers: ", sum(mask_outliers))
 
         if sum(mask_outliers)/len(mask_outliers)>0.5:
             print("!"*20)
-            print("[Early rejection] More than half of the data points have been considered outliers! Something may have gone wrong.")
+            print("More than half of the data points have been considered outliers! Something may have gone wrong.")
             print("!"*20)         
         
     if dump_images:
@@ -125,6 +135,8 @@ def main(config=None,
         plt.figure()
         plt.plot(f01)
         plt.title("Residuals after early outlier rejection")
+        plt.ylabel("Residual [pixels]")
+        plt.xlabel("X and Y coordinates")        
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "early_outlier_rejection_residuals.jpg"), bbox_inches='tight')        
         
@@ -186,15 +198,17 @@ def main(config=None,
 
     avg_abs_res = np.abs(f1).mean()
     print("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
-    if avg_abs_res>50:
+    if avg_abs_res>15:
         print("!"*20)
-        print("The average absolute residual error is higher than 50 pixels ({:0.2f})! Something may have gone wrong.".format(avg_abs_res))
+        print("The average absolute residual error is high! Something may have gone wrong.".format(avg_abs_res))
         print("!"*20)
             
     if dump_images:
         plt.figure()
         plt.plot(f1)
         plt.title("Residuals after optimization")
+        plt.ylabel("Residual [pixels]")
+        plt.xlabel("X and Y coordinates")        
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals.jpg"), bbox_inches='tight')        
 
@@ -229,6 +243,10 @@ def main(config=None,
             print("\t\t camera_params:", camera_params.shape)
             print("\t\t points_3d:", points_3d.shape)
             print("\t\t points_2d:", points_2d.shape)
+            
+            if len(points_2d)==0:
+                print("No points left! Exit.")
+                return
 
             new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
                                                                  point_indices, n_cameras, n_points, 
@@ -249,15 +267,17 @@ def main(config=None,
 
             avg_abs_res = np.abs(f2).mean()
             print("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
-            if avg_abs_res>50:
+            if avg_abs_res>15:
                 print("!"*20)
-                print("The average absolute residual error (after outlier removal) is higher than 50 pixels ({:0.2f})! Something may have gone wrong.".format(avg_abs_res))
+                print("The average absolute residual error (after outlier removal) is high! Something may have gone wrong.".format(avg_abs_res))
                 print("!"*20)
 
             if dump_images:
                 plt.figure()
                 plt.plot(f2)
                 plt.title("Residuals after outlier removal")
+                plt.ylabel("Residual [pixels]")
+                plt.xlabel("X and Y coordinates")                
                 plt.show()
                 plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_outliers_removal.jpg"),
                             bbox_inches='tight')
@@ -272,10 +292,10 @@ def main(config=None,
         points2d = points_2d[camera_indices==i]
         
         mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d)
-        print("\t {}: {:0.3f}+-{:0.3f}".format(view, mean_error, std_error))
+        print("\t {} n_points={}: {:0.3f}+-{:0.3f}".format(view, len(points3d), mean_error, std_error))
         
     ba_points = {"points_3d": new_points_3d[optimized_points].tolist(), 
-                 "timestamp":np.array(timestamps)[optimized_points].tolist()}  
+                 "ids":np.array(ids)[optimized_points].tolist()}  
     
     if __config__["each_visualisation"]<2 or __config__["each_visualisation"] is None:
         print("Visualise all the annotations.")

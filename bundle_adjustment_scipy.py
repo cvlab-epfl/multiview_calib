@@ -39,21 +39,25 @@ def pack_camera_params(K, R, t, dist):
     
     return rvec+tvec+ks+ds
 
-def project(points, camera_params):
+def project(points, camera_params, camera_indices):
     """Convert 3-D points to 2-D by projecting onto images."""
     
     points_ = np.reshape(points, (-1,3))
+    points_proj = np.empty((len(points_), 2))
+    mask_valid = np.empty((len(points_)), np.bool_)
     
-    points_proj = []
-    for p, cp in zip(points_, camera_params):
-
-        K, rvec, tvec, dist = unpack_camera_params(cp, rotation_matrix=False)
+    cam_idxs = list(set(camera_indices))
+    for cam_idx in cam_idxs:
         
-        proj = cv2.projectPoints(p[None], rvec, tvec, K, dist)[0].reshape(1,2)
-        points_proj.append(proj)
-        
-    points_proj = np.vstack(points_proj)
-    return points_proj
+        K, R, t, dist = unpack_camera_params(camera_params[cam_idx])
+    
+        mask = camera_indices==cam_idx
+        #proj = cv2.projectPoints(points_[mask,:], rvec, tvec, K, dist)[0].reshape(-1,2)
+        proj, m_valid = project_points(points_[mask,:], K, R, t, dist)
+        points_proj[mask,:] = proj
+        mask_valid[mask] = m_valid
+    
+    return points_proj, mask_valid
 
 def fun(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
     """Compute residuals.
@@ -63,9 +67,14 @@ def fun(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
     camera_params = params[:(n_cameras*15)].reshape((n_cameras, 15))
     points_3d = params[(n_cameras*15):].reshape((n_points, 3))
 
-    points_proj = project(points_3d[point_indices], camera_params[camera_indices])
+    points_proj, mask_valid = project(points_3d[point_indices], camera_params, camera_indices)
     
-    return (points_proj - points_2d).ravel()
+    residuals = (points_proj - points_2d)
+    
+    # we filter out points that are behind the camera
+    residuals[~mask_valid,:] = 0.0
+    
+    return residuals.ravel()
 
 def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices,
                                optimize_camera_params=True, optimize_points=True):
@@ -89,9 +98,14 @@ def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indice
     return A
 
 def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_triang=2):
+    
+    for view, val in landmarks.items():
+        idxs = np.argsort(val['ids'])
+        landmarks[view]['ids'] = [val['ids'][i] for i in idxs]
+        landmarks[view]['landmarks'] = [val['landmarks'][i] for i in idxs]
 
-    timestamps = set().union(*[landmarks[view]['timestamp'] for view in views])
-    timestamps = np.int32(list(timestamps)[::each])
+    ids = set().union(*[landmarks[view]['ids'] for view in views])
+    ids = np.int32(list(ids))[::each]
 
     # camera parameters
     camera_params = [pack_camera_params(intrinsics[view]['K'], extrinsics[view]['R'],
@@ -100,7 +114,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     camera_params = np.float64(camera_params)
 
     # triangulate 3D positions from all possible pair of views
-    points_3d_pairs = triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang)
+    points_3d_pairs = triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang)
 
     points_3d = []
     points_2d = []
@@ -109,11 +123,22 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     n_cameras = len(views)
 
     n_points = 0    
-    timestamps_kept = []
-    for t, p3ds in zip(timestamps, points_3d_pairs):
+    ids_kept = []
+    start_index = {view:0 for view in views} # to speedup this loop
+    for id, p3ds in zip(ids, points_3d_pairs):
 
-        # find in which view sample i exists
-        views_idxs = [j for j in range(n_cameras) if t in landmarks[views[j]]['timestamp']]
+        # find in which view sample exists
+        #views_idxs = [j for j in range(n_cameras) if id in landmarks[views[j]]['ids']]
+        views_idxs = []
+        idxs = []
+        for j in range(n_cameras):
+            try:
+                idx = landmarks[views[j]]['ids'].index(id, start_index[views[j]])
+                views_idxs.append(j)
+                idxs.append(idx)
+                start_index[views[j]] = idx
+            except:
+                pass        
 
         if len(views_idxs)<2:
             continue
@@ -122,11 +147,11 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
         p3d_mean = np.mean(np.reshape(p3ds, (-1,3)), axis=0)
         points_3d.append(p3d_mean)
 
-        idxs = [landmarks[views[j]]['timestamp'].index(t) for j in views_idxs]               
+        #idxs = [landmarks[views[j]]['ids'].index(id) for j in views_idxs]               
         points_2d += [landmarks[views[j]]['landmarks'][idx] for j,idx in zip(views_idxs, idxs)]
         camera_indices += views_idxs  
         point_indices += [n_points]*len(views_idxs)
-        timestamps_kept.append(t)
+        ids_kept.append(id)
 
         n_points += 1
 
@@ -136,7 +161,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     points_2d = np.vstack(points_2d)
     
     return camera_params, points_3d, points_2d, camera_indices, \
-           point_indices, n_cameras, n_points, timestamps_kept 
+           point_indices, n_cameras, n_points, ids_kept 
 
 def bundle_adjustment(camera_params, points_3d, points_2d, 
                       camera_indices, point_indices, 
@@ -203,10 +228,15 @@ def evaluate(camera_params, points_3d, points_2d,
     
     return residuals
 
-def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang=5):
+def triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang=5):
+    
+    for view, val in landmarks.items():
+        idxs = np.argsort(val['ids'])
+        landmarks[view]['ids'] = [val['ids'][i] for i in idxs]
+        landmarks[view]['landmarks'] = [val['landmarks'][i] for i in idxs]    
 
     n_cameras = len(views)
-    n_samples = len(timestamps)
+    n_samples = len(ids)
 
     # to speed things up
     poses = []
@@ -217,41 +247,30 @@ def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limi
         
         points = landmarks[views[j]]['landmarks']
         landmarks_undist[views[j]] = undistort_points(points, K, dist)
-        
-    '''
-    triang_points = {}
-    for j1, j2 in itertools.combinations(range(n_cameras), 2):
-
-        K1,R1,t1,dist1 = poses[j1]
-        K2,R2,t2,dist2 = poses[j2]
-
-        ps1 = []
-        ps2 = []
-        for i in timestamps:
-            timestamp1 = landmarks[views[j1]]['timestamp']
-            timestamp2 = landmarks[views[j2]]['timestamp']
-            if i in timestamp1 and i in timestamp2:
-                i1 = timestamp1.index(i)
-                i2 = timestamp2.index(i) 
-
-                ps1.append(landmarks_undist[views[j1]][i1])
-                ps2.append(landmarks_undist[views[j2]][i2])
-
-        p3d = triangulate(ps1, ps2, K1, R1, t1, None, K2, R2, t2, None)  
-        triang_points[(j1, j2)] = p3d
-    '''
-                     
+              
     points_3d_pairs = []
-    for i in timestamps:
+    start_index = {view:0 for view in views} # to speedup this loop
+    for i in ids:
 
         # find in which view sample i exists
-        views_idxs = [j for j in range(n_cameras) if i in landmarks[views[j]]['timestamp']]
+        #views_idxs = [j for j in range(n_cameras) if i in landmarks[views[j]]['ids']]
+        views_idxs = []
+        idxs = []
+        for j in range(n_cameras):
+            try:
+                idx = landmarks[views[j]]['ids'].index(i, start_index[views[j]])
+                views_idxs.append(j)
+                idxs.append(idx)
+                start_index[views[j]] = idx
+            except:
+                pass         
         
         # to estimate the 3D points we average the triangulations of 
         # multiple combinations of views. IF many cameras are used this might 
         # require a lot of time. TO limit the computational complexity
         # we limit here the number of views that are taken for the trinagulations
         views_idxs = views_idxs[:view_limit_triang]
+        idxs = idxs[:view_limit_triang]
 
         if len(views_idxs)<2:
             points_3d_pairs.append(None)
@@ -263,8 +282,10 @@ def triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limi
             K1,R1,t1,dist1 = poses[j1]
             K2,R2,t2,dist2 = poses[j2]
 
-            i1 = landmarks[views[j1]]['timestamp'].index(i)
-            i2 = landmarks[views[j2]]['timestamp'].index(i)            
+            #i1 = landmarks[views[j1]]['ids'].index(i)
+            #i2 = landmarks[views[j2]]['ids'].index(i)       
+            i1 = idxs[views_idxs.index(j1)]
+            i2 = idxs[views_idxs.index(j2)]
             
             p3d = triangulate(landmarks_undist[views[j1]][i1], 
                               landmarks_undist[views[j2]][i2],
@@ -279,10 +300,10 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     
     views = setup['views']
     
-    timestamps = set().union(*[landmarks[view]['timestamp'] for view in views])
-    timestamps = list(timestamps)[::each]    
+    ids = set().union(*[landmarks[view]['ids'] for view in views])
+    ids = list(ids)[::each]    
     
-    points_3d_tri = triangulate_all_pairs(views, landmarks, timestamps, camera_params)
+    points_3d_tri = triangulate_all_pairs(views, landmarks, ids, camera_params)
     points_3d_tri_chained = np.vstack([item for sublist in points_3d_tri if sublist is not None 
                                             for item in sublist if item is not None])
     
@@ -323,12 +344,12 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
         cams_names = [cams_names[i] for i in range(len(mask_valid)) if mask_valid[i]]
         cams_colors = [cams_colors[i] for i in range(len(mask_valid)) if mask_valid[i]]
 
-        def plot(p_tri, p_2d, prj, image, name):
+        def plot(p_tri, p_2d, prj, p_cams, image, name):
             plt.figure(figsize=(10,8))
             plt.plot(p_tri[:,0], p_tri[:,1], 'k.', markersize=1, label='Triang. from pairs')            
             plt.plot(p_2d[:,0], p_2d[:,1], 'g.', markersize=10, label='Annotations')
             plt.plot(prj[:,0], prj[:,1], 'r.', markersize=5, label='B.A results')
-            for _p, _name, _color in zip(proj_cams, cams_names, cams_colors):
+            for _p, _name, _color in zip(p_cams, cams_names, cams_colors):
                 plt.plot(*_p, color=np.array(_color), marker='s', linestyle="", markersize=10, label=_name)  
             plt.imshow(image)
             plt.title("{}-{}".format(view, name))
@@ -341,12 +362,14 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
         plot(proj_tri_pairs, 
              points_2d[camera_indices==idx_view], 
              proj, 
+             proj_cams,
              image, 
              "original")
             
         plot(undistort_points(proj_tri_pairs, K, dist), 
              undistort_points(points_2d[camera_indices==idx_view], K, dist),
              undistort_points(proj, K, dist),
+             undistort_points(proj_cams, K, dist),
              cv2.undistort(image, K, dist, None, K), 
              "undistorted")    
         
@@ -369,14 +392,14 @@ def error_measure(setup, landmarks, ba_poses, ba_points, scale=1, view_limit_tri
     
     views = setup['views']
 
-    timestamps = ba_points['timestamp']
+    ids = ba_points['ids']
     points_3d = ba_points['points_3d']
 
     camera_params = []
     for view in views:
         camera_params.append(pack_camera_params(**ba_poses[view]))
 
-    points_3d_tri = triangulate_all_pairs(views, landmarks, timestamps, camera_params, view_limit_triang=5)  
+    points_3d_tri = triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang=5)  
 
     avg_dists = []
     for p3d, tri in zip(points_3d, points_3d_tri):

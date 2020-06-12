@@ -65,21 +65,28 @@ python global_registration.py -e ba_poses.json -p ba_points.json world_points.js
 The result of this step are the camera poses defined in this new coordinate system.
 
 ## Input files
-The file `setup.json` contains the name of the views and the minimal number of pairs of views that allows to connect all the cameras togheter:
+The file `setup.json` contains the name of the views and the minimal number of pairs of views that allows to connect all the cameras togheter. `minimal_tree` is a tree and is single component, therefore, it cannot for loops and all views are connected.
 ```json
 {
  "views": [ "cam0", "cam1", "cam2", "cam3"], 
  "minimal_tree": [["cam0","cam1"], ["cam1","cam2"], ["cam3","cam0"]]
 }
 ```
-The file `landmarks.json` contains the points used to compute the poses. Each landmark has an associated timestamp. This defines a time when the landmark is visible. If the same landmark is visible in other views the same timestamp should be used. Multiple landmarks can have the same timestamp. 
+The file `landmarks.json` contains the image points use to compute the poses. An image point is the projection of a landmark that exist in the physcal space. A unique ID is associated to each landmark. If the same landmark is visible in other views the same ID is used. A landmark may not be visible in all views. 
 ```json
 {
- "cam0":{landmarks": [[530.1256, 877.56], [2145.5564, 987.4574], ..., [1023, 126]], 
-         "timestamp": [0, 0, ..., 3040]},
+ "cam0":{"landmarks": [[530.1256, 877.56], [2145.5564, 987.4574], ..., [1023, 126]],
+         "ids": [0, 1, ..., 3040]},
  ...
- "cam3":{landmarks": [[430.1256, 377.56], [2245.5564, 387.4574], ..., [2223, 1726]], 
-         "timestamp": [0, 0, ..., 3040]}         
+ "cam3":{"landmarks": [[430.1256, 377.56], [2245.5564, 387.4574], ..., [2223, 1726]], 
+         "ids": [1, 2, ..., 3040]}         
+}
+```
+The file `landmarks_global.json` contains 3D points defined in the "global" reference system. These defines the global location of the landmarks in the file `landmarks.json`. The IDs in this file must therefore allign with the IDs in the file `landmarks.json` but is not required that all landmarks have a global coordinate. The global points can be GPS coordinates in UTM+Altitude format or simply positions w.r.t any other reference the you want. The global point can be noisy.
+```json
+{
+ "landmarks_global": [[414278.16, 5316285.59, 5], [414278.16, 5316285.59, 5.5], ..., [414278.16, 5316285.59, 5.2]],
+ "ids": [0, 1, ..., 3040]}       
 }
 ```
 The file `intrinsics.json` contains the instrinsics parameters in the following format:

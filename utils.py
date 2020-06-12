@@ -11,7 +11,7 @@ import numpy as np
 __all__ = ["json_read", "json_write", "pickle_read", "pickle_write", 
            "mkdir", "sort_nicely", "find_files", "invert_Rt",
            "draw_points", "draw_rectangles", "dict_keys_to_string",
-           "dict_keys_from_literal_string"]
+           "dict_keys_from_literal_string", "indexes"]
 
 colors = [[1,0,0], [0,1,0], [0,0,1], 
            [0,0,0], [1,1,1], [1,1,0],
@@ -94,3 +94,6 @@ def invert_Rt(R, t):
     Ri = R.T
     ti = np.dot(-Ri, t)
     return Ri, ti
+
+def indexes(_list, value):
+    return [i for i,x in enumerate(_list) if x==value]
