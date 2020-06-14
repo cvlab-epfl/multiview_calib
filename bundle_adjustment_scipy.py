@@ -345,7 +345,7 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
         cams_colors = [cams_colors[i] for i in range(len(mask_valid)) if mask_valid[i]]
 
         def plot(p_tri, p_2d, prj, p_cams, image, name):
-            plt.figure(figsize=(10,8))
+            plt.figure(figsize=(14,8))
             plt.plot(p_tri[:,0], p_tri[:,1], 'k.', markersize=1, label='Triang. from pairs')            
             plt.plot(p_2d[:,0], p_2d[:,1], 'g.', markersize=10, label='Annotations')
             plt.plot(prj[:,0], prj[:,1], 'r.', markersize=5, label='B.A results')
@@ -369,7 +369,7 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
         plot(undistort_points(proj_tri_pairs, K, dist), 
              undistort_points(points_2d[camera_indices==idx_view], K, dist),
              undistort_points(proj, K, dist),
-             undistort_points(proj_cams, K, dist),
+             undistort_points(proj_cams, K, dist) if len(proj_cams)>0 else [],
              cv2.undistort(image, K, dist, None, K), 
              "undistorted")    
         

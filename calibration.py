@@ -11,7 +11,7 @@ from . import utils
 from .singleview_geometry import undistort_points, project_points
 from .twoview_geometry import (compute_relative_pose, residual_error,
                                sampson_distance, draw_epilines, triangulate, fundamental_from_relative_pose)
-from .point_set_registration import (estimate_scale_point_sets, procrustes_registration)
+from .point_set_registration import (estimate_scale_point_sets, procrustes_registration, point_set_registration)
 from .utils import colors as view_colors
 
 def verify_view_tree(view_tree):
@@ -417,3 +417,60 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
         _print_relative_pose_info(F, Rd, td, pts1_undist, pts2_undist, verbose, '')
 
     return relative_poses
+
+def global_registration(ba_poses, ba_points, landmarks_global):
+    
+    src, dst, ids_common = _common_landmarks(ba_points['points_3d'],
+                                             landmarks_global['landmarks_global'],
+                                             ba_points['ids'],
+                                             landmarks_global['ids'])
+    
+    print("src points: bundle adjustment optimized 3d points")
+    print("dst points: global coordinates")    
+    
+    scale, R, t, mean_dist = point_set_registration(src, dst, verbose=True) 
+    
+    R_inv, t_inv = utils.invert_Rt(R, t)
+
+    global_poses = {}
+    for cam,data in ba_poses.items():
+
+        R = np.array(data['R'])
+        t = np.reshape(data['t'], (3,1))
+
+        R2 = np.dot(R, R_inv)
+        t2 = np.dot(R, t_inv.reshape(3,-1)) + t.reshape(3,-1)*scale   
+
+        global_poses[cam] = {'K':data['K'], 'dist':data['dist'],
+                             'R':R2.tolist(), 't':t2.ravel().tolist()}
+        
+    return global_poses
+
+def visualise_global_registration(global_poses, landmarks_global, ba_poses, ba_points, 
+                                  filenames, output_path="output/global_registration"):
+    import matplotlib.pyplot as plt
+    
+    utils.mkdir(output_path)
+    
+    def plot(points3d, calib):
+        rvec = cv2.Rodrigues(np.array(calib['R']))[0]
+        tvec = np.array(calib['t'])
+        K = np.array(calib['K'])
+        dist = np.array(calib['dist'])
+
+        return cv2.projectPoints(points3d, rvec, tvec, K, dist)[0].reshape(-1,2)    
+    
+    for view, calib in global_poses.items():
+        
+        img = imageio.imread(filenames[view].format(view))
+
+        proj_glob = plot(np.array(landmarks_global['landmarks_global']), calib)
+        proj_ba = plot(np.array(ba_points['points_3d']), ba_poses[view])
+
+        plt.figure(figsize=(14,8))
+        plt.plot(proj_ba[:,0], proj_ba[:,1], 'r.', label='B.A points')
+        plt.plot(proj_glob[:,0], proj_glob[:,1], 'b.', label='Global points') 
+        plt.imshow(img)
+        plt.show()
+        plt.legend()
+        plt.savefig(os.path.join(output_path,"global_registration_{}.jpg".format(view)), bbox_inches='tight')

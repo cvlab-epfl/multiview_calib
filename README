@@ -57,13 +57,11 @@ The file `poses.json` is the output of the previous step.
 ```
 python bundle_adjustment.py -s setup.json -i intrinsics.json -e poses.json -l landmarks.json -f filenames.json --dump_images -c ba_config.json 
 ```
-#### Transformation to global reference system:
-Give correspondences between the 3D results of the bundle adjustment and 3D points of the world coordinate system, we compute rotation translation and scale that match the two point sets.
+#### Transformation to the global reference system:
+The poses and 3D points computed using the bundle adjustment are all w.r.t the reference system provided by the first camera. To transform the poses into the world coordinate system we require correspondences between the landmarks in the image and the world. These must be defined in the file `landmarks_global.json`. Given these correspondeces, the following command will find the best rigid transform in the least squares sense between the two point sets and then update the poses computed with the bundle adjustment. The global coordinates can be noisy. The output are the update poses saved in `global_poses.json`.
 ```
-python global_registration.py -e ba_poses.json -p ba_points.json world_points.json --dump_images  
+python global_registration.py -ps ba_poses.json -po ba_points.json -l landmarks_global.json -f filenames.json --dump_images  
 ```
-The result of this step are the camera poses defined in this new coordinate system.
-
 ## Input files
 The file `setup.json` contains the name of the views and the minimal number of pairs of views that allows to connect all the cameras togheter. `minimal_tree` is a tree and is single component, therefore, it cannot for loops and all views are connected.
 ```json
