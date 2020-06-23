@@ -62,6 +62,10 @@ The poses and 3D points computed using the bundle adjustment are all w.r.t the r
 ```
 python global_registration.py -ps ba_poses.json -po ba_points.json -l landmarks_global.json -f filenames.json --dump_images  
 ```
+If the global landmarks are a different set of points than the one used during the optimization, you can use the following command to compute the `ba_points.json`.
+```
+python triangulate_image_points.py -p ba_poses.json -l landmarks.json --dump_images
+```
 ## Input files
 The file `setup.json` contains the name of the views and the minimal number of pairs of views that allows to connect all the cameras togheter. `minimal_tree` is a tree and is single component, therefore, it cannot for loops and all views are connected.
 ```json

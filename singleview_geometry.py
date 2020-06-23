@@ -42,13 +42,18 @@ def project_points(pts, K, R, t, dist=None, image_shape=None):
 
     return proj, mask_valid
 
-def reprojection_error(R, t, K, dist, points3d, points2d):
+def reprojection_error(R, t, K, dist, points3d, points2d, method='mean'):
     
     proj, mask_in_front = project_points(points3d, K, R, t, dist)
     
     distances = np.linalg.norm(points2d[mask_in_front]-proj[mask_in_front], axis=1)
     
-    return distances.mean(), distances.std()
+    if method=='mean':
+        return distances.mean(), distances.std()
+    elif method=='median':
+        return np.median(distances), distances.std()
+    else:
+        raise ValueError("Unrecognized method '{}'".format(method))
 
 def change_intrinsics(points, K1, K2):
     fx1 = K1[0][0]

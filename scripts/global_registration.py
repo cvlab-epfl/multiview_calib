@@ -14,7 +14,7 @@ from multiview_calib.calibration import global_registration, visualise_global_re
 
 def main(ba_poses='ba_poses.json',
          ba_points='ba_points.json',
-         landmarks_global='landmarks_global',
+         landmarks_global='landmarks_global.json',
          dump_images=True,
          filenames="filenames.json",
          output_path="output/global_registration"):

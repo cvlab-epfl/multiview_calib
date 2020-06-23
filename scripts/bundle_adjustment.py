@@ -294,6 +294,18 @@ def main(config=None,
         mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d)
         print("\t {} n_points={}: {:0.3f}+-{:0.3f}".format(view, len(points3d), mean_error, std_error))
         
+    print("Reprojection errors (median pixels):")
+    ba_poses = {}
+    for i,(view, cp) in enumerate(zip(views, new_camera_params)):
+        K, R, t, dist = unpack_camera_params(cp)
+        ba_poses[view] = {"R":R.tolist(), "t":t.tolist(), "K":K.tolist(), "dist":dist.tolist()}
+        
+        points3d = new_points_3d[point_indices[camera_indices==i]]
+        points2d = points_2d[camera_indices==i]
+        
+        mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d, 'median')
+        print("\t {} n_points={}: {:0.3f}".format(view, len(points3d), mean_error))        
+        
     ba_points = {"points_3d": new_points_3d[optimized_points].tolist(), 
                  "ids":np.array(ids)[optimized_points].tolist()}  
     
