@@ -126,14 +126,15 @@ def compute_relative_poses(view_tree, intrinsics, landmarks,
         dist1 = np.float64(intrinsics[view1]['dist'])
         dist2 = np.float64(intrinsics[view2]['dist'])         
 
-        Rd, td, F, pts1_undist, pts2_undist, tri = compute_relative_pose(pts1, pts2,
-                                                                         K1=K1, dist1=dist1,
-                                                                         K2=K2, dist2=dist2, 
-                                                                         method=method, th=th)
+        Rd, td, F, pts1_undist, pts2_undist, tri, mask = compute_relative_pose(pts1, pts2,
+                                                                               K1=K1, dist1=dist1,
+                                                                               K2=K2, dist2=dist2, 
+                                                                               method=method, th=th)
         
         if verbose>0:
             print("{}Computing relative pose of pair {}:".format(print_prefix, [view1, view2]))
-        _print_relative_pose_info(F, Rd, td, pts1_undist, pts2_undist, verbose, print_prefix)
+            print("{}\t{} out of {} points considered outliers.".format(print_prefix, sum(~mask), len(pts1_undist)))
+        _print_relative_pose_info(F, Rd, td, pts1_undist[mask], pts2_undist[mask], verbose, print_prefix)
 
         relative_poses[(view1, view2)] = {"F":F.tolist(), "Rd":Rd.tolist(), "td":td.tolist(), 
                                           "triang_points":tri.tolist(),

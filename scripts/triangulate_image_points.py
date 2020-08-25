@@ -45,7 +45,7 @@ def main(poses='poses.json',
     if not res:
         raise ValueError(msg)    
 
-    views = list(poses.keys())
+    views = list(landmarks.keys())
     print("-"*20)
     print("Views: {}".format(views))
     

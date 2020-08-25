@@ -206,7 +206,7 @@ def compute_relative_pose(pts1, pts2, K1, dist1, K2=None, dist2=None, method='8p
                       K1=K1, dist1=None, 
                       K2=K2, R2=R, t2=t, dist2=None)
     
-    return R, t, F, pts1_undist, pts2_undist, tri
+    return R, t, F, pts1_undist, pts2_undist, tri, np.bool_(mask).ravel()
 
 def _draw_line(img, line, color=(255,0,0), linewidth=10):
     w = img.shape[1]
