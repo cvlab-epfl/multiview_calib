@@ -61,7 +61,7 @@ python bundle_adjustment.py -s setup.json -i intrinsics.json -e poses.json -l la
 #### Transformation to the global reference system:
 The poses and 3D points computed using the bundle adjustment are all w.r.t the reference system provided by the first camera. To transform the poses into the world coordinate system we require correspondences between the landmarks in the image and the world. These must be defined in the file `landmarks_global.json`. Given these correspondeces, the following command will find the best rigid transform in the least squares sense between the two point sets and then update the poses computed with the bundle adjustment. The global coordinates can be noisy. The output are the update poses saved in `global_poses.json`.
 ```
-python global_registration.py -ps ba_poses.json -po ba_points.json -l landmarks_global.json -f filenames.json --dump_images  
+python global_registration.py -s setup.json -ps ba_poses.json -po ba_points.json -l landmarks.json -lg landmarks_global.json -f filenames.json --dump_images  
 ```
 If the global landmarks are a different set of points than the one used during the optimization, you can use the following command to compute the `ba_points.json`.
 ```
