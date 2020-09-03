@@ -3,6 +3,7 @@ import argparse
 import matplotlib
 import matplotlib.pyplot as plt
 import imageio
+import logging
 import time
 import cv2
 import os
@@ -16,6 +17,8 @@ from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustm
                                                      visualisation, unpack_camera_params)
 from multiview_calib.singleview_geometry import reprojection_error
 from multiview_calib.calibration import verify_view_tree, verify_landmarks
+
+logger = logging.getLogger(__name__)
 
 __config__ = {
     "each_training":1, # to use less datatpoint during the optimization
@@ -45,6 +48,8 @@ def main(config=None,
          iter1=200,
          iter2=200,
          dump_images=True):
+    
+    utils.config_logger(os.path.join(".", "bundle_adjustment.log"))
 
     if config is not None:
         __config__ = utils.json_read(config)
@@ -52,8 +57,8 @@ def main(config=None,
     if iter1 is not None:
         __config__["max_nfev"] = iter1
     if iter2 is not None:
-        __config__["max_nfev2"] = iter2    
-    
+        __config__["max_nfev2"] = iter2   
+        
     if dump_images:
         utils.mkdir(__config__["output_path"])
 
@@ -71,26 +76,26 @@ def main(config=None,
         raise ValueError(msg)    
 
     views = setup['views']
-    print("-"*20)
-    print("Views: {}".format(views))
+    logging.info("-"*20)
+    logging.info("Views: {}".format(views))
     
     if __config__["each_training"]<2 or __config__["each_training"] is None:
-        print("Use all the landmarks.")
+        logging.info("Use all the landmarks.")
     else:
-        print("Subsampling the landmarks to 1 every {}.".format(__config__["each_training"]))    
+        logging.info("Subsampling the landmarks to 1 every {}.".format(__config__["each_training"]))    
 
-    print("Preparing the input data...(this can take a while depending on the number of points to triangulate)")
+    logging.info("Preparing the input data...(this can take a while depending on the number of points to triangulate)")
     start = time.time()
     camera_params, points_3d, points_2d,\
     camera_indices, point_indices, \
     n_cameras, n_points, ids = build_input(views, intrinsics, extrinsics, 
                                            landmarks, each=__config__["each_training"], 
                                            view_limit_triang=4)
-    print("The preparation of the input data took: {:0.2f}s".format(time.time()-start))
-    print("Sizes:")
-    print("\t camera_params:", camera_params.shape)
-    print("\t points_3d:", points_3d.shape)
-    print("\t points_2d:", points_2d.shape)
+    logging.info("The preparation of the input data took: {:0.2f}s".format(time.time()-start))
+    logging.info("Sizes:")
+    logging.info("\t camera_params: {}".format(camera_params.shape))
+    logging.info("\t points_3d: {}".format(points_3d.shape))
+    logging.info("\t points_2d: {}".format(points_2d.shape))
     
     f0 = evaluate(camera_params, points_3d, points_2d,
                   camera_indices, point_indices,
@@ -108,10 +113,10 @@ def main(config=None,
         
         
     if __config__["th_outliers_early"]==0 or __config__["th_outliers_early"] is None:
-        print("No early outlier rejection.")
+        logging.info("No early outlier rejection.")
     else:
-        print("Early Outlier rejection:")
-        print("\t threshold outliers: {}".format(__config__["th_outliers_early"])) 
+        logging.info("Early Outlier rejection:")
+        logging.info("\t threshold outliers: {}".format(__config__["th_outliers_early"])) 
         
         f0_ = np.abs(f0.reshape(-1,2))
         mask_outliers = np.logical_or(f0_[:,0]>__config__["th_outliers_early"],f0_[:,1]>__config__["th_outliers_early"])
@@ -119,12 +124,12 @@ def main(config=None,
         camera_indices = camera_indices[~mask_outliers]
         points_2d = points_2d[~mask_outliers]
         optimized_points = np.int32(list(set(point_indices)))
-        print("\t Number of points considered outliers: ", sum(mask_outliers))
+        logging.info("\t Number of points considered outliers: {}".format(sum(mask_outliers)))
 
         if sum(mask_outliers)/len(mask_outliers)>0.5:
-            print("!"*20)
-            print("More than half of the data points have been considered outliers! Something may have gone wrong.")
-            print("!"*20)         
+            logging.info("!"*20)
+            logging.info("More than half of the data points have been considered outliers! Something may have gone wrong.")
+            logging.info("!"*20)         
         
     if dump_images:
         
@@ -141,23 +146,23 @@ def main(config=None,
         plt.savefig(os.path.join(__config__["output_path"], "early_outlier_rejection_residuals.jpg"), bbox_inches='tight')        
         
     if __config__["bounds"]:
-        print("Bounded optimization:")
-        print("\t LB(x)=x-bound; UB(x)=x+bound")
-        print("\t rvec bounds=({},{},{})".format(*__config__["bounds_cp"][:3]))
-        print("\t tvec bounds=({},{},{})".format(*__config__["bounds_cp"][3:6]))
-        print("\t k bounds=(fx={},fy={},c0={},c1={})".format(*__config__["bounds_cp"][6:10]))
-        print("\t dist bounds=({},{},{},{},{})".format(*__config__["bounds_cp"][10:]))
-        print("\t 3d points bounds=(x={},y={},z={})".format(*__config__["bounds_pt"]))
+        logging.info("Bounded optimization:")
+        logging.info("\t LB(x)=x-bound; UB(x)=x+bound")
+        logging.info("\t rvec bounds=({},{},{})".format(*__config__["bounds_cp"][:3]))
+        logging.info("\t tvec bounds=({},{},{})".format(*__config__["bounds_cp"][3:6]))
+        logging.info("\t k bounds=(fx={},fy={},c0={},c1={})".format(*__config__["bounds_cp"][6:10]))
+        logging.info("\t dist bounds=({},{},{},{},{})".format(*__config__["bounds_cp"][10:]))
+        logging.info("\t 3d points bounds=(x={},y={},z={})".format(*__config__["bounds_pt"]))
     else:
-        print("Unbounded optimization.")
+        logging.info("Unbounded optimization.")
         
-    print("Least-Squares optimization of the 3D points:")
-    print("\t optimize camera parameters: {}".format(False))
-    print("\t optimize 3d points: {}".format(True))
-    print("\t ftol={:0.3e}".format(__config__["ftol"]))
-    print("\t xtol={:0.3e}".format(__config__["xtol"]))
-    print("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
-    print("\t max_nfev={}".format(__config__["max_nfev"]))
+    logging.info("Least-Squares optimization of the 3D points:")
+    logging.info("\t optimize camera parameters: {}".format(False))
+    logging.info("\t optimize 3d points: {}".format(True))
+    logging.info("\t ftol={:0.3e}".format(__config__["ftol"]))
+    logging.info("\t xtol={:0.3e}".format(__config__["xtol"]))
+    logging.info("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
+    logging.info("\t max_nfev={}".format(__config__["max_nfev"]))
         
     points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
                                      point_indices, n_cameras, n_points, 
@@ -171,13 +176,13 @@ def main(config=None,
                                      bounds_pt = __config__["bounds_pt"], 
                                      verbose=True, eps=1e-12)        
         
-    print("Least-Squares optimization of 3D points and camera parameters:")
-    print("\t optimize camera parameters: {}".format(True))
-    print("\t optimize 3d points: {}".format(True)) 
-    print("\t ftol={:0.3e}".format(__config__["ftol"]))
-    print("\t xtol={:0.3e}".format(__config__["xtol"]))
-    print("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
-    print("\t max_nfev={}".format(__config__["max_nfev"]))    
+    logging.info("Least-Squares optimization of 3D points and camera parameters:")
+    logging.info("\t optimize camera parameters: {}".format(True))
+    logging.info("\t optimize 3d points: {}".format(True)) 
+    logging.info("\t ftol={:0.3e}".format(__config__["ftol"]))
+    logging.info("\t xtol={:0.3e}".format(__config__["xtol"]))
+    logging.info("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
+    logging.info("\t max_nfev={}".format(__config__["max_nfev"]))    
         
     new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
                                                          point_indices, n_cameras, n_points, 
@@ -197,11 +202,11 @@ def main(config=None,
                   n_cameras, n_points)
 
     avg_abs_res = np.abs(f1).mean()
-    print("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
+    logging.info("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
     if avg_abs_res>15:
-        print("!"*20)
-        print("The average absolute residual error is high! Something may have gone wrong.".format(avg_abs_res))
-        print("!"*20)
+        logging.info("!"*20)
+        logging.info("The average absolute residual error is high! Something may have gone wrong.".format(avg_abs_res))
+        logging.info("!"*20)
             
     if dump_images:
         plt.figure()
@@ -216,11 +221,11 @@ def main(config=None,
     # These might be the result of inprecision in the annotations.
     # in this case we remove the resduals higher than 20 pixels.
     if __config__["th_outliers"]==0 or __config__["th_outliers"] is None:
-        print("No outlier rejection.")
+        logging.info("No outlier rejection.")
     else:
-        print("Outlier rejection:")
-        print("\t threshold outliers: {}".format(__config__["th_outliers"])) 
-        print("\t max_nfev={}".format(__config__["max_nfev2"]))
+        logging.info("Outlier rejection:")
+        logging.info("\t threshold outliers: {}".format(__config__["th_outliers"])) 
+        logging.info("\t max_nfev={}".format(__config__["max_nfev2"]))
 
         f1_ = np.abs(f1.reshape(-1,2))
         mask_outliers = np.logical_or(f1_[:,0]>__config__["th_outliers"],f1_[:,1]>__config__["th_outliers"])
@@ -228,24 +233,24 @@ def main(config=None,
         camera_indices = camera_indices[~mask_outliers]
         points_2d = points_2d[~mask_outliers]
         optimized_points = np.int32(list(set(point_indices)))
-        print("\t Number of points considered outliers: ", sum(mask_outliers))
+        logging.info("\t Number of points considered outliers: {}".format(sum(mask_outliers)))
         
         if sum(mask_outliers)==0:
-            print("\t Exit.")
+            logging.info("\t Exit.")
         else:
         
             if sum(mask_outliers)/len(mask_outliers)>0.5:
-                print("!"*20)
-                print("More than half of the data points have been considered outliers! Something may have gone wrong.")
-                print("!"*20)            
+                logging.info("!"*20)
+                logging.info("More than half of the data points have been considered outliers! Something may have gone wrong.")
+                logging.info("!"*20)            
 
-            print("\t New sizes:")
-            print("\t\t camera_params:", camera_params.shape)
-            print("\t\t points_3d:", points_3d.shape)
-            print("\t\t points_2d:", points_2d.shape)
+            logging.info("\t New sizes:")
+            logging.info("\t\t camera_params: {}".format(camera_params.shape))
+            logging.info("\t\t points_3d: {}".format(points_3d.shape))
+            logging.info("\t\t points_2d: {}".format(points_2d.shape))
             
             if len(points_2d)==0:
-                print("No points left! Exit.")
+                logging.info("No points left! Exit.")
                 return
 
             new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
@@ -266,11 +271,11 @@ def main(config=None,
                           n_cameras, n_points)
 
             avg_abs_res = np.abs(f2).mean()
-            print("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
+            logging.info("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
             if avg_abs_res>15:
-                print("!"*20)
-                print("The average absolute residual error (after outlier removal) is high! Something may have gone wrong.".format(avg_abs_res))
-                print("!"*20)
+                logging.info("!"*20)
+                logging.info("The average absolute residual error (after outlier removal) is high! Something may have gone wrong.".format(avg_abs_res))
+                logging.info("!"*20)
 
             if dump_images:
                 plt.figure()
@@ -282,7 +287,7 @@ def main(config=None,
                 plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_outliers_removal.jpg"),
                             bbox_inches='tight')
 
-    print("Reprojection errors (mean+-std pixels):")
+    logging.info("Reprojection errors (mean+-std pixels):")
     ba_poses = {}
     for i,(view, cp) in enumerate(zip(views, new_camera_params)):
         K, R, t, dist = unpack_camera_params(cp)
@@ -292,9 +297,9 @@ def main(config=None,
         points2d = points_2d[camera_indices==i]
         
         mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d)
-        print("\t {} n_points={}: {:0.3f}+-{:0.3f}".format(view, len(points3d), mean_error, std_error))
+        logging.info("\t {} n_points={}: {:0.3f}+-{:0.3f}".format(view, len(points3d), mean_error, std_error))
         
-    print("Reprojection errors (median pixels):")
+    logging.info("Reprojection errors (median pixels):")
     ba_poses = {}
     for i,(view, cp) in enumerate(zip(views, new_camera_params)):
         K, R, t, dist = unpack_camera_params(cp)
@@ -304,15 +309,15 @@ def main(config=None,
         points2d = points_2d[camera_indices==i]
         
         mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d, 'median')
-        print("\t {} n_points={}: {:0.3f}".format(view, len(points3d), mean_error))        
+        logging.info("\t {} n_points={}: {:0.3f}".format(view, len(points3d), mean_error))        
         
     ba_points = {"points_3d": new_points_3d[optimized_points].tolist(), 
                  "ids":np.array(ids)[optimized_points].tolist()}  
     
     if __config__["each_visualisation"]<2 or __config__["each_visualisation"] is None:
-        print("Visualise all the annotations.")
+        logging.info("Visualise all the annotations.")
     else:
-        print("Subsampling the annotations to visualise to 1 every {}.".format(__config__["each_visualisation"]))    
+        logging.info("Subsampling the annotations to visualise to 1 every {}.".format(__config__["each_visualisation"]))    
         
     path = __config__['output_path'] if dump_images else None
     visualisation(setup, landmarks, filenames_images, 

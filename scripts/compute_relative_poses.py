@@ -3,6 +3,7 @@ import argparse
 import matplotlib.pyplot as plt
 import matplotlib
 import imageio
+import logging
 import cv2
 import os
 import warnings
@@ -12,13 +13,18 @@ from multiview_calib import utils
 from multiview_calib.calibration import (compute_relative_poses, visualise_epilines, 
                                             verify_view_tree, verify_landmarks)
 
+logger = logging.getLogger(__name__)
+
 def main(setup='setup.json',
          intrinsics='intrinsics.json',
          landmarks='landmarks.json',
          filenames='filenames.json',         
          method='8point',
          dump_images=True,
-         th=20):
+         th=20,
+         output_path="output/relative_poses/"):
+    
+    utils.config_logger(os.path.join(".", "relative_poses.log"))
     
     setup = utils.json_read(setup)
     intrinsics = utils.json_read(intrinsics)
@@ -36,7 +42,7 @@ def main(setup='setup.json',
     
     if dump_images:
         visualise_epilines(setup['minimal_tree'], relative_poses, intrinsics, landmarks, 
-                           filenames, output_path="output/relative_poses/")
+                           filenames, output_path=output_path)
           
     relative_poses = utils.dict_keys_to_string(relative_poses)
     utils.json_write("relative_poses.json", relative_poses)

@@ -6,6 +6,7 @@ import os
 import ast
 import glob
 import pickle
+import logging
 import numpy as np
 
 __all__ = ["json_read", "json_write", "pickle_read", "pickle_write", 
@@ -97,3 +98,74 @@ def invert_Rt(R, t):
 
 def indexes(_list, value):
     return [i for i,x in enumerate(_list) if x==value]
+
+def config_logger(log_file=None):
+    """
+    Basic configuration of the logging system. Support logging to a file.
+    Log messages can be submitted from any script.
+    config_logger(.) is called once from the main script.
+    
+    Example
+    -------
+    import logging
+    logger = logging.getLogger(__name__)
+    utils.config_logger("main.log")
+    logger.info("this is a log.")    
+    """
+
+    class MyFormatter(logging.Formatter):
+
+        info_format = "\x1b[32;1m%(asctime)s [%(name)s]\x1b[0m %(message)s"
+        error_format = "\x1b[31;1m%(asctime)s [%(name)s] [%(levelname)s]\x1b[0m %(message)s"
+
+        def format(self, record):
+
+            if record.levelno > logging.INFO:
+                self._style._fmt = self.error_format
+            else:
+                self._style._fmt = self.info_format
+
+            return super(MyFormatter, self).format(record)
+
+    rootLogger = logging.getLogger()
+
+    if log_file is not None:
+        fileHandler = logging.FileHandler(log_file)
+        fileFormatter = logging.Formatter("%(asctime)s [%(name)s] [%(levelname)s]> %(message)s")
+        fileHandler.setFormatter(fileFormatter)
+        rootLogger.addHandler(fileHandler)
+
+    consoleHandler = logging.StreamHandler()
+    consoleFormatter = MyFormatter()
+    consoleHandler.setFormatter(consoleFormatter)
+    rootLogger.addHandler(consoleHandler)
+
+    rootLogger.setLevel(logging.INFO)
+    
+class StreamToLogger(object):
+    """
+    Fake file-like stream object that redirects writes to a logger instance.
+    """
+    def __init__(self, logger, log_level=logging.INFO):
+        self.logger = logger
+        self.log_level = log_level
+        self.linebuf = ''
+
+    def write(self, buf):
+        temp_linebuf = self.linebuf + buf
+        self.linebuf = ''
+        for line in temp_linebuf.splitlines(True):
+            # From the io.TextIOWrapper docs:
+            #   On output, if newline is None, any '\n' characters written
+            #   are translated to the system default line separator.
+            # By default sys.stdout.write() expects '\n' newlines and then
+            # translates them so this is still cross platform.
+            if line[-1] == '\n':
+                self.logger.log(self.log_level, line.rstrip())
+            else:
+                self.linebuf += line
+
+    def flush(self):
+        if self.linebuf != '':
+            self.logger.log(self.log_level, self.linebuf.rstrip())
+        self.linebuf = ''

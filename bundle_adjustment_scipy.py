@@ -1,9 +1,11 @@
 import numpy as np
 import cv2
 import os
+import sys
 from scipy.sparse import lil_matrix
 import time
 import imageio
+import logging
 import itertools
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
@@ -16,6 +18,9 @@ from .utils import colors as view_colors
 __all__ = ["build_input", "bundle_adjustment", 
            "evaluate", "triangulate_all_pairs", "pack_camera_params", "unpack_camera_params",
            "visualisation", "error_measure"]
+
+logger = logging.getLogger(__name__)
+stream_to_logger = utils.StreamToLogger(logger, logging.INFO)
 
 def unpack_camera_params(camera_params, rotation_matrix=True):
 
@@ -199,15 +204,16 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
     else:
         bounds = (-np.inf, np.inf)
         if verbose:
-            print("bounds (-inf, inf)")
+            logging.info("bounds (-inf, inf)")
         
+    sys.stdout = stream_to_logger
     res = least_squares(fun, x0, jac='2-point', jac_sparsity=A, verbose=2 if verbose else 0, 
                         x_scale='jac', loss=loss, f_scale=f_scale, ftol=ftol, xtol=xtol, method='trf',
                         args=(n_cameras, n_points, camera_indices, point_indices, points_2d),
                         max_nfev=max_nfev, bounds=bounds)
     if verbose:
         t1 = time.time()
-        print("Optimization took {0:.0f} seconds".format(t1 - t0))
+        logging.info("Optimization took {0:.0f} seconds".format(t1 - t0))
     
     new_camera_params = res.x[:n_cameras*15].reshape(n_cameras, 15)
     new_points_3d = res.x[n_cameras*15:].reshape(n_points, 3)
@@ -399,12 +405,12 @@ def error_measure(setup, landmarks, ba_poses, ba_points, scale=1, view_limit_tri
     for view in views:
         camera_params.append(pack_camera_params(**ba_poses[view]))
 
-    points_3d_tri = triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang=5)  
+    points_3d_tri = triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang)  
 
     avg_dists = []
     for p3d, tri in zip(points_3d, points_3d_tri):
-
-        dist = np.linalg.norm(np.reshape(p3d,(1,3))-np.reshape(tri,(-1,3)), axis=1)*scale
-        avg_dists.append(dist.mean())   
+        if tri is not None:
+            dist = np.linalg.norm(np.reshape(p3d,(1,3))-np.reshape(tri,(-1,3)), axis=1)*scale
+            avg_dists.append(dist.mean())   
 
     return np.mean(avg_dists), np.std(avg_dists), np.median(avg_dists)

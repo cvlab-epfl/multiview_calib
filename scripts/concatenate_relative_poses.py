@@ -2,6 +2,7 @@ import numpy as np
 import argparse
 import matplotlib
 import imageio
+import logging
 import cv2
 import os
 import warnings
@@ -13,10 +14,15 @@ from multiview_calib import utils
 from multiview_calib.calibration import (concatenate_relative_poses, visualise_cameras_and_triangulated_points, 
                                             verify_view_tree)
 
+logger = logging.getLogger(__name__)
+
 def main(setup='setup.json',
          relative_poses='relative_poses.json',
          method='cross-ratios',
-         dump_images=True):
+         dump_images=True,
+         output_path="output/relative_poses/"):
+    
+    utils.config_logger(os.path.join(".", "concat_relative_poses.log"))
     
     setup = utils.json_read(setup)
     relative_poses = utils.json_read(relative_poses) 
@@ -27,7 +33,7 @@ def main(setup='setup.json',
     
     poses, triang_points = concatenate_relative_poses(setup['minimal_tree'], relative_poses, method)
         
-    path = "output/relative_poses" if dump_images else None
+    path = output_path if dump_images else None
     visualise_cameras_and_triangulated_points(setup['views'], setup['minimal_tree'], poses, triang_points, 
                                               max_points=100, path=path)        
             

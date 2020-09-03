@@ -3,6 +3,7 @@ import numpy as np
 import imageio
 import itertools 
 import random
+import logging
 import cv2
 import networkx as nx
 from networkx.algorithms.tree.mst import maximum_spanning_edges
@@ -11,8 +12,11 @@ from . import utils
 from .singleview_geometry import undistort_points, project_points
 from .twoview_geometry import (compute_relative_pose, residual_error,
                                sampson_distance, draw_epilines, triangulate, fundamental_from_relative_pose)
-from .point_set_registration import (estimate_scale_point_sets, procrustes_registration, point_set_registration)
+from .point_set_registration import (estimate_scale_point_sets, procrustes_registration, 
+                                     point_set_registration, apply_rigid_transform)
 from .utils import colors as view_colors
+
+logger = logging.getLogger(__name__)
 
 def verify_view_tree(view_tree):
     G = nx.DiGraph()
@@ -100,15 +104,15 @@ def visualise_epilines(view_tree, relative_poses, intrinsics, landmarks, filenam
 def _print_relative_pose_info(F, Rd, td, pts1_undist, pts2_undist, verbose=2, print_prefix=''):
     
     if verbose>1:
-        print("{}\tFundamental matrix:\n{}\t\t{}\n{}\t\t{}\n{}\t\t{}".format(print_prefix, 
+        logging.info("{}\tFundamental matrix:\n{}\t\t{}\n{}\t\t{}\n{}\t\t{}".format(print_prefix, 
                                                                               print_prefix, F[0], 
                                                                               print_prefix, F[1], 
                                                                               print_prefix, F[2]))
-        print("{}\tRight camera position:\n{}\t\t{}".format(print_prefix, 
+        logging.info("{}\tRight camera position:\n{}\t\t{}".format(print_prefix, 
                                                              print_prefix, utils.invert_Rt(Rd, td)[1].ravel()))
     if verbose>0:
-        print("{}\tResidual error: {}".format(print_prefix, residual_error(pts1_undist, pts2_undist, F)[0]))
-        print("{}\tSampson distance: {}".format(print_prefix, sampson_distance(pts1_undist, pts2_undist, F)[0]))    
+        logging.info("{}\tResidual error: {}".format(print_prefix, residual_error(pts1_undist, pts2_undist, F)[0]))
+        logging.info("{}\tSampson distance: {}".format(print_prefix, sampson_distance(pts1_undist, pts2_undist, F)[0]))    
         
 def compute_relative_poses(view_tree, intrinsics, landmarks, 
                             method='8point', th=20, verbose=2, print_prefix=''):
@@ -132,8 +136,8 @@ def compute_relative_poses(view_tree, intrinsics, landmarks,
                                                                                method=method, th=th)
         
         if verbose>0:
-            print("{}Computing relative pose of pair {}:".format(print_prefix, [view1, view2]))
-            print("{}\t{} out of {} points considered outliers.".format(print_prefix, sum(~mask), len(pts1_undist)))
+            logging.info("{}Computing relative pose of pair {}:".format(print_prefix, [view1, view2]))
+            logging.info("{}\t{} out of {} points considered outliers.".format(print_prefix, sum(~mask), len(pts1_undist)))
         _print_relative_pose_info(F, Rd, td, pts1_undist[mask], pts2_undist[mask], verbose, print_prefix)
 
         relative_poses[(view1, view2)] = {"F":F.tolist(), "Rd":Rd.tolist(), "td":td.tolist(), 
@@ -290,12 +294,12 @@ def concatenate_relative_poses(minimal_tree, relative_poses, method='cross-ratio
             t2 = np.dot(Rd, t1)+relative_scale*td   
             
             if verbose>0:
-                print("{}Concatenating relative poses for pair: {}".format(print_prefix, curr_pair))
-                print("{}\t Relative scale to {} n_points={}: {:0.3f}+-{:0.3f}".format(print_prefix, adj_pair, len(p3d_com), relative_scale, relative_scale_std))
-                print("{}\t {} new position: {}".format(print_prefix, second_view, utils.invert_Rt(R2, t2)[1].ravel()))
+                logging.info("{}Concatenating relative poses for pair: {}".format(print_prefix, curr_pair))
+                logging.info("{}\t Relative scale to {} n_points={}: {:0.3f}+-{:0.3f}".format(print_prefix, adj_pair, len(p3d_com), relative_scale, relative_scale_std))
+                logging.info("{}\t {} new position: {}".format(print_prefix, second_view, utils.invert_Rt(R2, t2)[1].ravel()))
                 
             if relative_scale<0.1:
-                print("!!!! The relative scale for this pair is quite low. Something may have gone wrong !!!!")                
+                logging.info("!!!! The relative scale for this pair is quite low. Something may have gone wrong !!!!")                
 
             # transform the triangulated points of the current pair to the origin
             if inverse:
@@ -358,9 +362,9 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
     for view1, view2 in view_tree:
         
         if verbose>0:
-            print("-------------------------------------------------")
-            print("Computing robust relative pose for pair {}->{}".format(view1, view2))
-            print("Initial relative pose:")
+            logging.info("-------------------------------------------------")
+            logging.info("Computing robust relative pose for pair {}->{}".format(view1, view2))
+            logging.info("Initial relative pose:")
         
         view_tree = [[view1, view2]]
         relative_pose = compute_relative_poses(view_tree, intrinsics, landmarks, method, th, 
@@ -368,10 +372,10 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
         
         triangles = [ x for x in list(nx.all_simple_paths(G, view1, view2, 2)) if len(x)==3][:max_paths]
         if len(triangles)==0:
-            print("There are no other way to reach view {} from {}.".format(view2, view1))
+            logging.info("There are no other way to reach view {} from {}.".format(view2, view1))
         
         if verbose>0:
-            print("Number of additional paths found: {}".format(len(triangles)))
+            logging.info("Number of additional paths found: {}".format(len(triangles)))
         
         relative_pose_robust = {'Rd':[relative_pose[(view1, view2)]['Rd']], 
                                 'td':[relative_pose[(view1, view2)]['td']]}
@@ -414,7 +418,7 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
                                           'triang_points':tri.tolist(),
                                           'ids':ids_common}  
         if verbose>0:
-            print("Final relative pose:")
+            logging.info("Final relative pose:")
         _print_relative_pose_info(F, Rd, td, pts1_undist, pts2_undist, verbose, '')
 
     return relative_poses
@@ -426,10 +430,13 @@ def global_registration(ba_poses, ba_points, landmarks_global):
                                              ba_points['ids'],
                                              landmarks_global['ids'])
     
-    print("src points: bundle adjustment optimized 3d points")
-    print("dst points: global coordinates")    
+    logging.info("src points: bundle adjustment optimized 3d points")
+    logging.info("dst points: global coordinates")    
     
-    scale, R, t, mean_dist = point_set_registration(src, dst, verbose=True) 
+    scale, R, t, mean_dist = point_set_registration(src, dst, verbose=True)
+    
+    global_triang_points = {'points_3d':apply_rigid_transform(src, R, t, scale).tolist(),
+                            'ids': ids_common}
     
     R_inv, t_inv = utils.invert_Rt(R, t)
 
@@ -445,7 +452,7 @@ def global_registration(ba_poses, ba_points, landmarks_global):
         global_poses[cam] = {'K':data['K'], 'dist':data['dist'],
                              'R':R2.tolist(), 't':t2.ravel().tolist()}
         
-    return global_poses
+    return global_poses, global_triang_points
 
 def visualise_global_registration(global_poses, landmarks_global, ba_poses, ba_points, 
                                   filenames, output_path="output/global_registration"):

@@ -1,6 +1,9 @@
 import numpy as np
 import itertools
+import logging
 import cv2
+
+logger = logging.getLogger(__name__)
 
 def average_distance(X, Y):
     return np.linalg.norm(X-Y, axis=1).mean()
@@ -98,15 +101,15 @@ def point_set_registration(src, dst, verbose=True):
     mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 
     
     if verbose:
-        print("Initial guess using Procrustes registration:")
-        print("\t Mean error: {:0.3f} [unit of dst]".format(mean_dist))
+        logging.info("Initial guess using Procrustes registration:")
+        logging.info("\t Mean error distance: {:0.3f} [unit of destination (dst) point set]".format(mean_dist))
         
     if np.linalg.det(R)<0:
-        print("!"*20)
-        print("Procrusted produced a rotation matrix with negative determinant.")
-        print("This implies that the coordinate systems of src and dst have different handedness.")
-        print("To fix this you have to flip one or more of the axis of your input..for example by negating them.")
-        print("!"*20)
+        logging.info("!"*20)
+        logging.info("Procrusted produced a rotation matrix with negative determinant.")
+        logging.info("This implies that the coordinate systems of src and dst have different handedness.")
+        logging.info("To fix this you have to flip one or more of the axis of your input..for example by negating them.")
+        logging.info("!"*20)
     
     def funct(x):
         R, t, scale = unpack_params(x)
@@ -118,13 +121,13 @@ def point_set_registration(src, dst, verbose=True):
                    options={'maxiter':10000, 'disp':True}, 
                    tol=1e-9)
     if verbose:
-        print(res)   
+        logging.info(res)   
     
     R, t , scale = unpack_params(res.x)
     mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 
 
     if verbose:
-        print("Final registration:")
-        print("\t Mean error: {:0.3f} [unit of dst]".format(mean_dist))     
+        logging.info("Final registration:")
+        logging.info("\t Mean error distance: {:0.3f} [unit of destination (dst) point set]".format(mean_dist))     
     
     return scale, R, t, mean_dist
