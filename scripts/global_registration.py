@@ -60,11 +60,15 @@ if __name__ == "__main__":
             raise argparse.ArgumentTypeError('Boolean value expected.')    
 
     parser = argparse.ArgumentParser()   
+    parser.add_argument("--setup", "-s", type=str, required=True, default="setup.json",
+                        help='JSON file containing the camera setup')
     parser.add_argument("--ba_poses", "-ps", type=str, required=True, default="ba_poses.json",
                         help='JSON file containing the optimized poses')
     parser.add_argument("--ba_points", "-po", type=str, required=True, default="ba_points.json",
                         help='JSON file containing the optimized 3d points')
-    parser.add_argument("--landmarks_global", "-l", type=str, required=True, default="landmarks_global.json",
+    parser.add_argument("--landmarks", "-l", type=str, required=True, default="landmarks.json",
+                        help='JSON file containing the landmark for each view')
+    parser.add_argument("--landmarks_global", "-lg", type=str, required=True, default="landmarks_global.json",
                         help='JSON file containing the corresponding global landmarks') 
 
     parser.add_argument("--dump_images", "-d", default=False, const=True, action='store_const',
