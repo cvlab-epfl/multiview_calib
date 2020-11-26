@@ -7,8 +7,7 @@ from .singleview_geometry import undistort_points
 __all__ = ["essential_to_fundamental", "fundamental_to_essential", "compute_right_epipole",
            "compute_left_epipole", "residual_error", "sampson_distance",
            "triangulate", "recover_pose", "compute_relative_pose",
-           "draw_epilines", "visualise_cameras_and_triangulated_points", 
-           "essential_from_relative_pose", "fundamental_from_relative_pose", 
+           "draw_epilines", "essential_from_relative_pose", "fundamental_from_relative_pose", 
            "relative_pose", "essential_from_poses", "fundamental_from_poses",
            "compute_epilines"]
 
@@ -150,6 +149,12 @@ def compute_relative_pose(pts1, pts2, K1, dist1, K2=None, dist2=None, method='8p
     
     if len(pts1)<8 or len(pts2)<8:
         raise ValueError("The algorithm needs at least 8 points!")
+        
+    if len(pts1)!=len(pts2):
+        raise ValueError("The number points in the views is different! {}!={}".format(len(pts1),len(pts2)))  
+
+    if len(pts1[0])!=2 or len(pts2[2])!=2:
+        raise ValueError("Wrong dimensionality of the input points! pts1.size(1)={}, pts2.size(1)={}".format(len(pts1[0]),len(pts2[0])))
     
     if K2 is None:
         K2 = K1

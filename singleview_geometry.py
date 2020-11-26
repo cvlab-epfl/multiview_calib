@@ -10,11 +10,11 @@ __all__ = ["undistort_points", "invert_Rt", "project_points",
            "draw_points", "draw_rectangles"]
 
 def undistort_points(points, K, distCoeffs, norm_coord=False):
+    points_ = np.reshape(points, (-1,1,2))
     fx = K[0][0]
     fy = K[1][1]
     cx = K[0][2]
     cy = K[1][2]
-    points_ = np.float32(points).reshape(-1,1,2)
     points_ = cv2.undistortPoints(points_, K, distCoeffs)
     points_ = np.reshape(points_, (-1,2))
     if not norm_coord:
@@ -24,7 +24,8 @@ def undistort_points(points, K, distCoeffs, norm_coord=False):
     return points_
 
 def project_points(pts, K, R, t, dist=None, image_shape=None):
-    pts_ = np.reshape(pts, (-1,3))
+    pts_ = np.array(pts)
+    assert pts_.shape[1]==3
     
     proj = np.dot(K, np.dot(R,pts_.T) + t.reshape(3,1))
     z = proj[2]

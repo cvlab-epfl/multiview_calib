@@ -47,6 +47,8 @@ def verify_landmarks(landmarks):
         number = len(val['landmarks'])==len(val['ids'])
         if not number:
             return False, "the number of IDs and landmarks in landmark file is not the same!" 
+        if len(val['landmarks'][0])!=2:
+            return False, "the landmarks must be defined in a two-dimensional space! {} wrong.".format(view)
     return True, ""
 
 def _common_landmarks(landmarks1, landmarks2, ids1, ids2):
