@@ -119,7 +119,7 @@ def point_set_registration(src, dst, verbose=True):
     x0 = pack_params(R, t, scale)
     res = minimize(funct, x0, method='Nelder-Mead', 
                    options={'maxiter':10000, 'disp':True}, 
-                   tol=1e-9)
+                   tol=1e-24)
     if verbose:
         logging.info(res)   
     

@@ -5,14 +5,15 @@ import re
 import os
 import ast
 import glob
+import shutil
 import pickle
 import logging
 import numpy as np
 
 __all__ = ["json_read", "json_write", "pickle_read", "pickle_write", 
-           "mkdir", "sort_nicely", "find_files", "invert_Rt",
-           "draw_points", "draw_rectangles", "dict_keys_to_string",
-           "dict_keys_from_literal_string", "indexes"]
+           "mkdir", "rmdir", "sort_nicely", "find_files", "find_images", 
+           "invert_Rt", "rgb2gray", "draw_points", "draw_rectangles", 
+           "dict_keys_to_string", "dict_keys_from_literal_string", "indexes"]
 
 colors = [[1,0,0], [0,1,0], [0,0,1], 
            [0,0,0], [1,1,1], [1,1,0],
@@ -52,6 +53,11 @@ def mkdir(directory):
     directory = os.path.abspath(directory)
     if not os.path.exists(directory):
         os.makedirs(directory)
+        
+def rmdir(directory):
+    directory = os.path.abspath(directory)
+    if os.path.exists(directory): 
+        shutil.rmtree(directory)        
 
 def sort_nicely(l):
     """ Sort the given list in the way that humans expect.
@@ -75,6 +81,15 @@ def find_files(file_or_folder, hint=None, recursive=False):
             filename_files.append(filename)                 
     return filename_files
 
+def find_images(file_or_folder, hint=None):  
+    filenames = find_files(file_or_folder, hint)
+    filename_images = []
+    for filename in filenames:
+        _, extension = os.path.splitext(filename)
+        if extension.lower() in [".jpg",".jpeg",".bmp",".tiff",".png",".gif"]:
+            filename_images.append(filename)                 
+    return filename_images  
+
 def dict_keys_to_string(d):
     return {str(key):value for key,value in d.items()}
 
@@ -90,6 +105,11 @@ def dict_keys_from_literal_string(d):
             new_key = key
         new_d[new_key] = value
     return new_d
+
+def rgb2gray(image):
+    dtype = image.dtype
+    gray = np.dot(image[...,:3], [0.299, 0.587, 0.114])
+    return gray.astype(dtype)
 
 def invert_Rt(R, t):
     Ri = R.T
