@@ -10,8 +10,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from multiview_calib import utils 
-from multiview_calib.calibration import (compute_relative_poses, visualise_epilines, 
-                                            verify_view_tree, verify_landmarks)
+from multiview_calib.extrinsics import (compute_relative_poses, visualise_epilines, 
+                                        verify_view_tree, verify_landmarks)
 
 logger = logging.getLogger(__name__)
 

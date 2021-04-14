@@ -9,7 +9,7 @@ import networkx as nx
 from networkx.algorithms.tree.mst import maximum_spanning_edges
 
 from . import utils 
-from .singleview_geometry import undistort_points, project_points
+from .singleview_geometry import undistort_points
 from .twoview_geometry import (compute_relative_pose, residual_error,
                                sampson_distance, draw_epilines, triangulate, fundamental_from_relative_pose)
 from .point_set_registration import (estimate_scale_point_sets, procrustes_registration, 
@@ -426,6 +426,14 @@ def compute_relative_poses_robust(views, view_tree, intrinsics, landmarks,
     return relative_poses
 
 def global_registration(ba_poses, ba_points, landmarks_global):
+    """
+    Finds the rigid transformation between the two points clouds (B.A. points -> global landmarks).
+    
+    The transformation comprises a rotation, a translation and a scale factor.
+    
+    It is important to note that this transformation won't change the relative
+    position nor orientation of the cameras.
+    """
     
     src, dst, ids_common = _common_landmarks(ba_points['points_3d'],
                                              landmarks_global['landmarks_global'],
@@ -485,97 +493,3 @@ def visualise_global_registration(global_poses, landmarks_global, ba_poses, ba_p
         plt.legend()
         plt.savefig(os.path.join(output_path,"global_registration_{}.jpg".format(view)), bbox_inches='tight')
         
-def distortion_function(points_norm, dist):
-    """
-    Parameters
-    ----------
-    points_norm : numpy.ndarray (N,2)
-        undistorted image points in normalized image coordinates.
-        In other words, 3D object points transformed with [R,t]
-    dist: list or numpy.ndarray (5,)
-        distortion coefficients
-    
-    Return
-    ------
-    numpy.ndarray (N,2) distorted points
-    """
-    k_ = dist.reshape(5)
-
-    x,y = points_norm[:,0], points_norm[:,1]
-    r2 = x*x + y*y
-    r4 = r2*r2
-    r6 = r4*r2
-    a1 = 2*x*y
-    a2 = r2 + 2*x*x
-    a3 = r2 + 2*y*y
-    cdist = 1 + k_[0]*r2 + k_[1]*r4 + k_[4]*r6
-    xd0 = x*cdist + k_[2]*a1 + k_[3]*a2
-    yd0 = y*cdist + k_[2]*a3 + k_[3]*a1 
-
-    return np.vstack([xd0, yd0]).T
-
-def is_distortion_function_monotonic(dist, range=(0, 1.5, 100)):
-    
-    x = np.linspace(*range)
-    px = distortion_function(np.vstack([x,x]).T, dist)[:,0]
-
-    return np.all((px[1:]-px[:-1])>0) 
-
-def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm,
-                                 range_constraint=(0, 1.4, 1000), verbose=True):
-    """
-    Enforce monotonic distortion function by varying the distortion coefficients
-
-    Parameters
-    ----------
-    dist: list or numpy.ndarray (5,)
-        initial distortion coefficients
-    K: numpy.ndarray (3,3)
-        intrinsic matrix
-    image_points_norm : numpy.ndarray (N,2)
-        image points (distorted) in normalized image coordinates
-    proj_undist_norm : numpy.ndarray (N,2)
-        projected object points (undistorted) in normalized image coordinates
-    range_constraint : tuple (3,)
-        range where the monotonicity must be enforced
-    Return
-    ------
-    numpy.ndarray (5, ) new distortion coefficients
-    """
-    from scipy.optimize import minimize
-
-    def diffs(points, k):
-        proj = distortion_function(points,k)
-        return proj[1:,:]-proj[:-1,:]
-
-    # these are the points we want to be monotonous after undistorting them
-    x_constraint = np.linspace(*range_constraint)
-    x_constraint = np.vstack([x_constraint, x_constraint]).T
-
-    def f(k_new):
-        image_points_undist = cv2.undistortPoints(image_points, K, k_new).reshape(-1,2)
-        cost = np.sum((image_points_undist-proj_undist_norm)**2, axis=1).mean()
-        return cost
-
-    def ineq_constraint(k_new):
-        return diffs(x_constraint, k_new)[:,0]
-
-    con = {'type': 'ineq', 'fun': ineq_constraint, 'lb':0, 'ub':None}
-
-    x0 = dist.copy().reshape(5,)+0
-    #bounds=[(x-np.abs(x)*0.1, x+np.abs(x)*0.1) for x in x0]
-    bounds=[(x-np.abs(1e-6), x+np.abs(1e-6)) for x in x0[:-1]]+[(x0[-1]-1, x0[-1]+1)] # we only chnage k3
-    res = minimize(f, x0, method='SLSQP', tol=1e-32, constraints=con, bounds=bounds,
-                   options={'ftol': 1e-32, 'eps': 1e-12, 'disp': verbose, 'maxiter':1000})
-    if verbose:
-        print(res)
-
-    new_dist = res.x
-
-    if not is_distortion_function_monotonic(new_dist, range_constraint):
-        #raise RuntimeError("Enforce monotonic distortion unsuccessful!")
-        s = "Enforce monotonic distortion is unsuccessful"
-        s += " but it does not mean that the distortion parameter are bad."
-        print(s)
-
-    return new_dist      

@@ -11,8 +11,8 @@ warnings.filterwarnings("ignore")
 matplotlib.use("Agg")
 
 from multiview_calib import utils
-from multiview_calib.calibration import (concatenate_relative_poses, visualise_cameras_and_triangulated_points, 
-                                            verify_view_tree)
+from multiview_calib.extrinsics import (concatenate_relative_poses, visualise_cameras_and_triangulated_points, 
+                                        verify_view_tree)
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ from multiview_calib import utils
 from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustment, evaluate, 
                                                      visualisation, unpack_camera_params)
 from multiview_calib.singleview_geometry import reprojection_error
-from multiview_calib.calibration import verify_view_tree, verify_landmarks
+from multiview_calib.extrinsics import verify_view_tree, verify_landmarks
 
 logger = logging.getLogger(__name__)
 

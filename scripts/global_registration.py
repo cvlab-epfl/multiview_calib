@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore")
 matplotlib.use("Agg")
 
 from multiview_calib import utils
-from multiview_calib.calibration import global_registration, visualise_global_registration
+from multiview_calib.extrinsics import global_registration, visualise_global_registration
 from multiview_calib.bundle_adjustment_scipy import error_measure
 
 logger = logging.getLogger(__name__)

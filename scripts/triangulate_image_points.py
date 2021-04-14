@@ -15,7 +15,7 @@ from multiview_calib import utils
 from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustment, evaluate, 
                                                      unpack_camera_params)
 from multiview_calib.singleview_geometry import reprojection_error
-from multiview_calib.calibration import verify_landmarks
+from multiview_calib.extrinsics import verify_landmarks
 
 __config__ = { 
     "ftol":1e-18,
