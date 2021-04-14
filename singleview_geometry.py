@@ -9,18 +9,12 @@ import cv2
 __all__ = ["undistort_points", "invert_Rt", "project_points",
            "draw_points", "draw_rectangles"]
 
-def undistort_points(points, K, distCoeffs, norm_coord=False):
+def undistort_points(points, K, distCoeffs, norm_coord=False, newcameramtx=None):
     points_ = np.reshape(points, (-1,1,2))
-    fx = K[0][0]
-    fy = K[1][1]
-    cx = K[0][2]
-    cy = K[1][2]
-    points_ = cv2.undistortPoints(points_, K, distCoeffs)
+    if newcameramtx is None:
+        newcameramtx = K
+    points_ = cv2.undistortPoints(np.float32(points_), K, distCoeffs, P=newcameramtx, R=None)
     points_ = np.reshape(points_, (-1,2))
-    if not norm_coord:
-        for p in points_:
-            p[0] = p[0]*fx + cx
-            p[1] = p[1]*fy + cy
     return points_
 
 def project_points(pts, K, R, t, dist=None, image_shape=None):
@@ -42,6 +36,27 @@ def project_points(pts, K, R, t, dist=None, image_shape=None):
     proj = cv2.projectPoints(pts_, rvec, t, K, dist)[0].reshape(-1,2)
 
     return proj, mask_valid
+
+def project_points_homography(H, points, return_mask=False, front_positive=True):
+    """
+    If `return_mask` is True, will return a mask indicating which points were
+    projected "in front of" the camera.
+    """
+    _points = np.reshape(points, (-1, 2))
+
+    p = np.vstack([_points.T, np.ones(len(_points))])
+    transformed = np.dot(H, p)
+    projected = (transformed[:2] / transformed[2]).T
+
+    if np.linalg.det(H)<0:
+        mask = transformed[2] >= 0
+    else:
+        mask = transformed[2] <= 0
+
+    if return_mask:
+        return projected, mask
+
+    return projected
 
 def reprojection_error(R, t, K, dist, points3d, points2d, method='mean'):
     

@@ -24,13 +24,18 @@ __config__ = {
     "f_scale":1,
     "max_nfev":200, # first optimization
     "bounds_cp":[0]*15,
-    "bounds_pt":[1000]*3,    
-    "output_path": "output/triangulate_image_points/"
+    "bounds_pt":[10]*3,    
+    "output_path": "output/triangulate_image_points/",
+    "th_outliers":-1
 }
 
 def main(poses='poses.json',
          landmarks='landmarks.json',
-         dump_images=True): 
+         dump_images=True,
+         th_outliers=-1): 
+    
+    if th_outliers>0:
+        __config__['th_outliers'] = th_outliers
     
     if dump_images:
         utils.mkdir(__config__["output_path"])
@@ -93,6 +98,51 @@ def main(poses='poses.json',
         plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals.jpg"), bbox_inches='tight')  
         plt.ylim(-10,10)
         plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_ylim.jpg"), bbox_inches='tight')
+        
+    if __config__['th_outliers']>0:
+        
+        #f1_ = np.abs(f1.reshape(-1,2))
+        #mask_outliers = np.logical_or(f1_[:,0]>__config__["th_outliers"],f1_[:,1]>__config__["th_outliers"])
+        
+        f1_ = f1.reshape(-1,2)
+        mask_outliers = np.sum(np.abs(f1_-f1_.mean())>(f1_.std()*__config__["th_outliers"]), axis=1)>0
+        
+        
+        point_indices = point_indices[~mask_outliers]
+        camera_indices = camera_indices[~mask_outliers]
+        points_2d = points_2d[~mask_outliers]
+        optimized_points = np.int32(list(set(point_indices)))
+        print("Number of points considered outliers: {}".format(sum(mask_outliers)))
+
+        points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
+                                         point_indices, n_cameras, n_points, 
+                                         optimize_camera_params=False, 
+                                         optimize_points=True, 
+                                         ftol=__config__["ftol"], xtol=__config__["xtol"],
+                                         loss=__config__['loss'], f_scale=__config__['f_scale'],
+                                         max_nfev=__config__["max_nfev"], 
+                                         bounds=True, 
+                                         bounds_cp = __config__["bounds_cp"],
+                                         bounds_pt = __config__["bounds_pt"],
+                                         verbose=True, eps=1e-12)
+        
+        f2 = evaluate(camera_params, points_3d_ref, points_2d, 
+                      camera_indices, point_indices, 
+                      n_cameras, n_points)
+
+        avg_abs_res = np.abs(f2).mean()
+        print("Average absolute residual after outlier removal: {:0.2f} over {} points.".format(avg_abs_res, len(f2)/2))
+
+        if dump_images:
+            plt.figure()
+            plt.plot(f1)
+            plt.title("Residuals after optimization (after outlier removal)")
+            plt.ylabel("Residual [pixels]")
+            plt.xlabel("X and Y coordinates")        
+            plt.show()
+            plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_outlier_removal.jpg"), bbox_inches='tight')  
+            plt.ylim(-10,10)
+            plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_ylim_outlier_removal.jpg"), bbox_inches='tight')
 
     print("Reprojection errors (mean+-std pixels):")
     for i,(view, cp) in enumerate(zip(views, camera_params)):
@@ -138,9 +188,11 @@ if __name__ == "__main__":
                         help='JSON file containing the image landmarks for each view')
     parser.add_argument("--dump_images", "-d", default=False, const=True, action='store_const',
                         help='Saves images for visualisation') 
+    parser.add_argument("--th_outliers", "-to", type=float, required=False, default=-1,
+                        help='Threshold for outlier removal. Outliers are discarded after the first optimization then re-run it to refine the estimates. If -1, it is not used.')
 
     args = parser.parse_args()
 
     main(**vars(args))
 
-# python triangulate_image_points.py -p poses.json -l landmarks.json --dump_images 
+# python triangulate_image_points.py -p poses.json -l landmarks.json --dump_images --th_outliers -1

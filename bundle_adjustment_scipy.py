@@ -124,7 +124,8 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     points_3d = []
     points_2d = []
     camera_indices = []
-    point_indices = [] 
+    point_indices = []
+    views_and_ids = []
     n_cameras = len(views)
 
     n_points = 0    
@@ -151,9 +152,9 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
         # estimate of the 3d position
         p3d_mean = np.mean(np.reshape(p3ds, (-1,3)), axis=0)
         points_3d.append(p3d_mean)
-
-        #idxs = [landmarks[views[j]]['ids'].index(id) for j in views_idxs]               
+          
         points_2d += [landmarks[views[j]]['landmarks'][idx] for j,idx in zip(views_idxs, idxs)]
+        views_and_ids += [(views[j],int(id)) for j in views_idxs] 
         camera_indices += views_idxs  
         point_indices += [n_points]*len(views_idxs)
         ids_kept.append(id)
@@ -166,7 +167,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     points_2d = np.vstack(points_2d)
     
     return camera_params, points_3d, points_2d, camera_indices, \
-           point_indices, n_cameras, n_points, ids_kept 
+           point_indices, n_cameras, n_points, ids_kept, views_and_ids 
 
 def bundle_adjustment(camera_params, points_3d, points_2d, 
                       camera_indices, point_indices, 
@@ -206,11 +207,16 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
         if verbose:
             logging.info("bounds (-inf, inf)")
         
+    original_stdout = sys.stdout
     sys.stdout = stream_to_logger
+    
     res = least_squares(fun, x0, jac='2-point', jac_sparsity=A, verbose=2 if verbose else 0, 
                         x_scale='jac', loss=loss, f_scale=f_scale, ftol=ftol, xtol=xtol, method='trf',
                         args=(n_cameras, n_points, camera_indices, point_indices, points_2d),
                         max_nfev=max_nfev, bounds=bounds)
+    
+    sys.stdout = original_stdout
+    
     if verbose:
         t1 = time.time()
         logging.info("Optimization took {0:.0f} seconds".format(t1 - t0))
@@ -371,13 +377,16 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
              proj_cams,
              image, 
              "original")
-            
-        plot(undistort_points(proj_tri_pairs, K, dist), 
-             undistort_points(points_2d[camera_indices==idx_view], K, dist),
-             undistort_points(proj, K, dist),
-             undistort_points(proj_cams, K, dist) if len(proj_cams)>0 else [],
-             cv2.undistort(image, K, dist, None, K), 
-             "undistorted")    
+        
+        h,w = image.shape[:2]
+        newcameramtx, roi = cv2.getOptimalNewCameraMatrix(K, dist, (w, h), 0.9, (w, h), centerPrincipalPoint=False)        
+        
+        plot(undistort_points(proj_tri_pairs, K, dist, newcameramtx=newcameramtx), 
+             undistort_points(points_2d[camera_indices==idx_view], K, dist, newcameramtx=newcameramtx),
+             undistort_points(proj, K, dist, newcameramtx=newcameramtx),
+             undistort_points(proj_cams, K, dist, newcameramtx=newcameramtx) if len(proj_cams)>0 else [],
+             cv2.undistort(image, K, dist, None, newcameramtx), 
+             "undistorted")        
         
     # ------------ for 3D visualisation -----------   
     poses = {}

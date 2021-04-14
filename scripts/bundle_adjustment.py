@@ -88,9 +88,9 @@ def main(config=None,
     start = time.time()
     camera_params, points_3d, points_2d,\
     camera_indices, point_indices, \
-    n_cameras, n_points, ids = build_input(views, intrinsics, extrinsics, 
-                                           landmarks, each=__config__["each_training"], 
-                                           view_limit_triang=4)
+    n_cameras, n_points, ids, views_and_ids = build_input(views, intrinsics, extrinsics, 
+                                                          landmarks, each=__config__["each_training"], 
+                                                          view_limit_triang=4)
     logging.info("The preparation of the input data took: {:0.2f}s".format(time.time()-start))
     logging.info("Sizes:")
     logging.info("\t camera_params: {}".format(camera_params.shape))
@@ -104,14 +104,19 @@ def main(config=None,
     if dump_images:
         
         plt.figure()
-        plt.plot(f0)
+        camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
+        for view_idx in range(n_cameras):
+            m = camera_indices_rav==view_idx
+            plt.plot(f0[m], label='{}'.format(views[view_idx]))
         plt.title("Residuals at initialization")
         plt.ylabel("Residual [pixels]")
         plt.xlabel("X and Y coordinates")
+        plt.legend()
+        plt.grid()
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "initial_residuals.jpg"), bbox_inches='tight')
         
-        
+    outliers = []
     if __config__["th_outliers_early"]==0 or __config__["th_outliers_early"] is None:
         logging.info("No early outlier rejection.")
     else:
@@ -120,16 +125,21 @@ def main(config=None,
         
         f0_ = np.abs(f0.reshape(-1,2))
         mask_outliers = np.logical_or(f0_[:,0]>__config__["th_outliers_early"],f0_[:,1]>__config__["th_outliers_early"])
+        
+        utils.json_write(os.path.join(__config__["output_path"], "outliers_early.json"), 
+                         [views_and_ids[i]+(points_2d[i].tolist(),) for i,m in enumerate(mask_outliers) if m])        
+        
         point_indices = point_indices[~mask_outliers]
         camera_indices = camera_indices[~mask_outliers]
         points_2d = points_2d[~mask_outliers]
+        views_and_ids = [views_and_ids[i] for i,m in enumerate(~mask_outliers) if m]
         optimized_points = np.int32(list(set(point_indices)))
         logging.info("\t Number of points considered outliers: {}".format(sum(mask_outliers)))
 
         if sum(mask_outliers)/len(mask_outliers)>0.5:
             logging.info("!"*20)
             logging.info("More than half of the data points have been considered outliers! Something may have gone wrong.")
-            logging.info("!"*20)         
+            logging.info("!"*20) 
         
     if dump_images:
         
@@ -138,10 +148,15 @@ def main(config=None,
                       n_cameras, n_points)         
         
         plt.figure()
-        plt.plot(f01)
+        camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
+        for view_idx in range(n_cameras):
+            m = camera_indices_rav==view_idx
+            plt.plot(f01[m], label='{}'.format(views[view_idx]))      
         plt.title("Residuals after early outlier rejection")
         plt.ylabel("Residual [pixels]")
-        plt.xlabel("X and Y coordinates")        
+        plt.xlabel("X and Y coordinates") 
+        plt.legend()
+        plt.grid()
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "early_outlier_rejection_residuals.jpg"), bbox_inches='tight')        
         
@@ -210,10 +225,15 @@ def main(config=None,
             
     if dump_images:
         plt.figure()
-        plt.plot(f1)
+        camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
+        for view_idx in range(n_cameras):
+            m = camera_indices_rav==view_idx
+            plt.plot(f1[m], label='{}'.format(views[view_idx]))     
         plt.title("Residuals after optimization")
         plt.ylabel("Residual [pixels]")
-        plt.xlabel("X and Y coordinates")        
+        plt.xlabel("X and Y coordinates") 
+        plt.legend()
+        plt.grid()
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals.jpg"), bbox_inches='tight')        
 
@@ -229,11 +249,19 @@ def main(config=None,
 
         f1_ = np.abs(f1.reshape(-1,2))
         mask_outliers = np.logical_or(f1_[:,0]>__config__["th_outliers"],f1_[:,1]>__config__["th_outliers"])
+        
+        utils.json_write(os.path.join(__config__["output_path"], "outliers_optimized.json"), 
+                         [views_and_ids[i]+(points_2d[i].tolist(),) for i,m in enumerate(mask_outliers) if m])
+        
         point_indices = point_indices[~mask_outliers]
         camera_indices = camera_indices[~mask_outliers]
         points_2d = points_2d[~mask_outliers]
+        views_and_ids = [views_and_ids[i] for i,m in enumerate(~mask_outliers) if m]
         optimized_points = np.int32(list(set(point_indices)))
         logging.info("\t Number of points considered outliers: {}".format(sum(mask_outliers)))
+        
+
+        
         
         if sum(mask_outliers)==0:
             logging.info("\t Exit.")
@@ -271,7 +299,7 @@ def main(config=None,
                           n_cameras, n_points)
 
             avg_abs_res = np.abs(f2).mean()
-            logging.info("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
+            logging.info("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f2)/2))
             if avg_abs_res>15:
                 logging.info("!"*20)
                 logging.info("The average absolute residual error (after outlier removal) is high! Something may have gone wrong.".format(avg_abs_res))
@@ -279,10 +307,15 @@ def main(config=None,
 
             if dump_images:
                 plt.figure()
-                plt.plot(f2)
+                camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
+                for view_idx in range(n_cameras):
+                    m = camera_indices_rav==view_idx
+                    plt.plot(f2[m], label='{}'.format(views[view_idx]))
                 plt.title("Residuals after outlier removal")
                 plt.ylabel("Residual [pixels]")
-                plt.xlabel("X and Y coordinates")                
+                plt.xlabel("X and Y coordinates")    
+                plt.legend()
+                plt.grid()
                 plt.show()
                 plt.savefig(os.path.join(__config__["output_path"], "optimized_residuals_outliers_removal.jpg"),
                             bbox_inches='tight')

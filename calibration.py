@@ -521,21 +521,21 @@ def is_distortion_function_monotonic(dist, range=(0, 1.5, 100)):
 
     return np.all((px[1:]-px[:-1])>0) 
 
-def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm, 
-                                 range_constraint=(0, 1.4, 1000), verbose=True): 
+def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm,
+                                 range_constraint=(0, 1.4, 1000), verbose=True):
     """
     Enforce monotonic distortion function by varying the distortion coefficients
-    
+
     Parameters
     ----------
     dist: list or numpy.ndarray (5,)
         initial distortion coefficients
     K: numpy.ndarray (3,3)
-        intrinsic matrix      
+        intrinsic matrix
     image_points_norm : numpy.ndarray (N,2)
         image points (distorted) in normalized image coordinates
     proj_undist_norm : numpy.ndarray (N,2)
-        projected object points (undistorted) in normalized image coordinates 
+        projected object points (undistorted) in normalized image coordinates
     range_constraint : tuple (3,)
         range where the monotonicity must be enforced
     Return
@@ -547,9 +547,9 @@ def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm,
     def diffs(points, k):
         proj = distortion_function(points,k)
         return proj[1:,:]-proj[:-1,:]
-    
+
     # these are the points we want to be monotonous after undistorting them
-    x_constraint = np.linspace(*range_constraint) 
+    x_constraint = np.linspace(*range_constraint)
     x_constraint = np.vstack([x_constraint, x_constraint]).T
 
     def f(k_new):
@@ -564,12 +564,12 @@ def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm,
 
     x0 = dist.copy().reshape(5,)+0
     #bounds=[(x-np.abs(x)*0.1, x+np.abs(x)*0.1) for x in x0]
-    bounds=[(x, x) for x in x0[:-1]]+[(None, None)] # we only chnage k3
+    bounds=[(x-np.abs(1e-6), x+np.abs(1e-6)) for x in x0[:-1]]+[(x0[-1]-1, x0[-1]+1)] # we only chnage k3
     res = minimize(f, x0, method='SLSQP', tol=1e-32, constraints=con, bounds=bounds,
                    options={'ftol': 1e-32, 'eps': 1e-12, 'disp': verbose, 'maxiter':1000})
     if verbose:
         print(res)
-    
+
     new_dist = res.x
 
     if not is_distortion_function_monotonic(new_dist, range_constraint):
@@ -577,5 +577,5 @@ def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm,
         s = "Enforce monotonic distortion is unsuccessful"
         s += " but it does not mean that the distortion parameter are bad."
         print(s)
-        
-    return new_dist        
+
+    return new_dist      
