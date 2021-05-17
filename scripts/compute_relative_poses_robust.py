@@ -27,7 +27,7 @@ def main(setup='setup.json',
          dump_images=True,
          output_path="output/relative_poses/"):
     
-    utils.config_logger(os.path.join(".", "relative_poses_robust.log"))
+    utils.config_logger(os.path.join(output_path, "relative_poses_robust.log"))
     
     setup = utils.json_read(setup)
     intrinsics = utils.json_read(intrinsics)
@@ -49,7 +49,7 @@ def main(setup='setup.json',
                            filenames, output_path=output_path)
     
     relative_poses = utils.dict_keys_to_string(relative_poses)
-    utils.json_write("relative_poses.json", relative_poses)
+    utils.json_write(os.path.join(output_path, "relative_poses.json"), relative_poses)
 
 if __name__ == "__main__":
 

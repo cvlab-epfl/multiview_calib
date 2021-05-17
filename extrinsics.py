@@ -445,8 +445,9 @@ def global_registration(ba_poses, ba_points, landmarks_global):
     
     scale, R, t, mean_dist = point_set_registration(src, dst, verbose=True)
     
-    global_triang_points = {'points_3d':apply_rigid_transform(src, R, t, scale).tolist(),
-                            'ids': ids_common}
+    global_triang_points = {'points_3d':apply_rigid_transform(np.array(ba_points['points_3d']), 
+                                                              R, t, scale).tolist(),
+                            'ids': ba_points['ids']}
     
     R_inv, t_inv = utils.invert_Rt(R, t)
 

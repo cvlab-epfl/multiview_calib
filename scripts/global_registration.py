@@ -25,7 +25,7 @@ def main(setup='setup.json',
          filenames="filenames.json",
          output_path="output/global_registration"):
     
-    utils.config_logger(os.path.join(".", "global_registration.log"))
+    utils.config_logger(os.path.join(output_path, "global_registration.log"))
     
     setup = utils.json_read(setup)
     ba_poses = utils.json_read(ba_poses)
@@ -40,8 +40,8 @@ def main(setup='setup.json',
         visualise_global_registration(global_poses, landmarks_global, ba_poses, ba_points, 
                                       filenames, output_path=output_path)
             
-    utils.json_write("global_poses.json", global_poses)
-    utils.json_write("global_triang_points.json", global_triang_points)
+    utils.json_write(os.path.join(output_path, "global_poses.json"), global_poses)
+    utils.json_write(os.path.join(output_path, "global_triang_points.json"), global_triang_points)
     
     avg_dist, std_dist, median_dist = error_measure(setup, landmarks, global_poses, global_triang_points, 
                                                     scale=1, view_limit_triang=5)

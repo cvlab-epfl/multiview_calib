@@ -194,14 +194,14 @@ def main(folder_images, output_folder, description,
     print("working hard...")
     #ret, mtx, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, image_shape[::-1], None, None)
     
-    #criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
     
     iFixedPoint = inner_corners_height-1
     ret, mtx, distCoeffs, rvecs, tvecs, newObjPoints, \
     stdDeviationsIntrinsics, stdDeviationsExtrinsics, \
     stdDeviationsObjPoints, perViewErrors = cv2.calibrateCameraROExtended(objpoints, imgpoints, image_shape[::-1],
                                                                           iFixedPoint, K_guess, dist_guess,
-                                                                          flags=calib_flag)#, criteria=criteria)
+                                                                          flags=calib_flag, criteria=criteria)
     
     def reprojection_error(mtx, distCoeffs, rvecs, tvecs):
         # print reprojection error

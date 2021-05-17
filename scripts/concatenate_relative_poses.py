@@ -22,7 +22,7 @@ def main(setup='setup.json',
          dump_images=True,
          output_path="output/relative_poses/"):
     
-    utils.config_logger(os.path.join(".", "concat_relative_poses.log"))
+    utils.config_logger(os.path.join(output_path, "concat_relative_poses.log"))
     
     setup = utils.json_read(setup)
     relative_poses = utils.json_read(relative_poses) 
@@ -37,9 +37,9 @@ def main(setup='setup.json',
     visualise_cameras_and_triangulated_points(setup['views'], setup['minimal_tree'], poses, triang_points, 
                                               max_points=100, path=path)        
             
-    utils.json_write("poses.json", poses)   
+    utils.json_write(os.path.join(output_path, "poses.json"), poses)   
     triang_points = utils.dict_keys_to_string(triang_points)
-    utils.json_write("triang_points.json", triang_points)
+    utils.json_write(os.path.join(output_path, "triang_points.json"), triang_points)
     
 if __name__ == "__main__":
 

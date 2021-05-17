@@ -48,13 +48,13 @@ def enforce_monotonic_distortion(dist, K, image_points, proj_undist_norm,
                                  range_constraint=(0, 1.4, 1000), verbose=True):
     """
     Forces the distortion function to be monotonic in the given range.
-    The range is defined in normalized image coordinate.
-    It starts at the principal point moves away from it.
+    The range is defined in the normalized image coordinate system.
+    It starts at the principal point and moves away from it.
     
     IMPORTANT: The monotonicity is enforce to the detriment of the accuracy of the calibration.
-    A large range will induce a higher calibration error. 
+    A large range will induce a higher error. 
     Before using this, try to sample more precise points on the corner of the image first.
-    It it is not enought switch to the Rational Camera Model.  
+    If it is not enought switch to the Rational Camera Model.  
 
     Parameters
     ----------
@@ -165,7 +165,3 @@ def probe_monotonicity(K, dist, newcameramtx, image_shape, N=100, M=100):
     is_monotonic = np.logical_and(*is_monotonic.T)
     
     return grid, is_monotonic
-
-
-        
-    

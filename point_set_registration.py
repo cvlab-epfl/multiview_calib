@@ -120,8 +120,8 @@ def point_set_registration(src, dst, verbose=True):
     res = minimize(funct, x0, method='Nelder-Mead', 
                    options={'maxiter':10000, 'disp':True}, 
                    tol=1e-24)
-    if verbose:
-        logging.info(res)   
+    #if verbose:
+    #    logging.info(res)   
     
     R, t , scale = unpack_params(res.x)
     mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 

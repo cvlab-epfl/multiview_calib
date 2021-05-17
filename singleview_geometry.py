@@ -6,8 +6,7 @@ import os
 import numpy as np
 import cv2
 
-__all__ = ["undistort_points", "invert_Rt", "project_points",
-           "draw_points", "draw_rectangles"]
+__all__ = ["undistort_points", "invert_Rt", "project_points"]
 
 def undistort_points(points, K, distCoeffs, norm_coord=False, newcameramtx=None):
     points_ = np.reshape(points, (-1,1,2))
@@ -98,43 +97,3 @@ def invert_Rt(R, t):
     Ri = R.T
     ti = np.dot(-Ri, t)
     return Ri, ti
-
-def draw_points(image, centers, radius, color='r'): 
-    """ Draws filled point on the image
-    """
-    _image = image.copy()        
-    if color=='r':
-        color = [255,0,0]
-    elif color=='g':
-        color = [0,255,0]
-    elif color=='b':
-        color = [0,0,255]
-    elif color=='w':
-        color = [255,255,255]
-    elif color=='k':
-        color = [0,0,0]
-    
-    for point in centers:
-        _image = cv2.circle(_image, tuple(point.astype(np.int)), radius, color=color, thickness=-1)
-    return _image
-
-def draw_rectangles(image, centers, size, color='r', thickness=3): 
-    """ Draws rectangles on the image
-    """ 
-    _image = image.copy()
-    if color=='r':
-        color = [255,0,0]
-    elif color=='g':
-        color = [0,255,0]
-    elif color=='b':
-        color = [0,0,255]
-    elif color=='w':
-        color = [255,255,255]
-    elif color=='k':
-        color = [0,0,0]
-        
-    for i, (x,y) in enumerate(np.int_(centers)):
-        pt1 = (x-size[1]//2, y-size[0]//2)
-        pt2 = (x+size[1]//2, y+size[0]//2)
-        _image = cv2.rectangle(_image, pt1, pt2, color=color, thickness=thickness)
-    return _image

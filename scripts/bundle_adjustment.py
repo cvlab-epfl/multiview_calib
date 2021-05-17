@@ -1,7 +1,8 @@
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import argparse
-import matplotlib
-import matplotlib.pyplot as plt
 import imageio
 import logging
 import time
@@ -9,8 +10,6 @@ import cv2
 import os
 import warnings
 warnings.filterwarnings("ignore")
-
-matplotlib.use("Agg")
 
 from multiview_calib import utils 
 from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustment, evaluate, 
@@ -48,8 +47,6 @@ def main(config=None,
          iter1=200,
          iter2=200,
          dump_images=True):
-    
-    utils.config_logger(os.path.join(".", "bundle_adjustment.log"))
 
     if config is not None:
         __config__ = utils.json_read(config)
@@ -61,12 +58,16 @@ def main(config=None,
         
     if dump_images:
         utils.mkdir(__config__["output_path"])
+        
+    utils.config_logger(os.path.join(__config__["output_path"], "bundle_adjustment.log"))
 
     setup = utils.json_read(setup)
     intrinsics = utils.json_read(intrinsics)
     extrinsics = utils.json_read(extrinsics)
     landmarks = utils.json_read(landmarks)
     filenames_images = utils.json_read(filenames)
+    
+    n_dist_coeffs = len(list(intrinsics.values())[0]['dist'])
     
     if not verify_view_tree(setup['minimal_tree']):
         raise ValueError("minimal_tree is not a valid tree!")  
@@ -189,7 +190,8 @@ def main(config=None,
                                      bounds=__config__["bounds"], 
                                      bounds_cp = __config__["bounds_cp"],
                                      bounds_pt = __config__["bounds_pt"], 
-                                     verbose=True, eps=1e-12)        
+                                     verbose=True, eps=1e-12,
+                                     n_dist_coeffs=n_dist_coeffs)        
         
     logging.info("Least-Squares optimization of 3D points and camera parameters:")
     logging.info("\t optimize camera parameters: {}".format(True))
@@ -209,7 +211,8 @@ def main(config=None,
                                                          bounds=__config__["bounds"], 
                                                          bounds_cp = __config__["bounds_cp"],
                                                          bounds_pt = __config__["bounds_pt"], 
-                                                         verbose=True, eps=1e-12)
+                                                         verbose=True, eps=1e-12,
+                                                         n_dist_coeffs=n_dist_coeffs)
 
     
     f1 = evaluate(new_camera_params, new_points_3d, points_2d, 
@@ -291,7 +294,8 @@ def main(config=None,
                                                                  bounds=__config__["bounds"], 
                                                                  bounds_cp = __config__["bounds_cp"],
                                                                  bounds_pt = __config__["bounds_pt"], 
-                                                                 verbose=True, eps=1e-12)
+                                                                 verbose=True, eps=1e-12,
+                                                                 n_dist_coeffs=n_dist_coeffs)
 
 
             f2 = evaluate(new_camera_params, new_points_3d, points_2d, 
@@ -357,8 +361,8 @@ def main(config=None,
                   new_camera_params, new_points_3d, 
                   points_2d, camera_indices, each=__config__["each_visualisation"], path=path)    
 
-    utils.json_write("ba_poses.json", ba_poses)
-    utils.json_write("ba_points.json", ba_points)
+    utils.json_write(os.path.join(__config__["output_path"], "ba_poses.json"), ba_poses)
+    utils.json_write(os.path.join(__config__["output_path"], "ba_points.json"), ba_points)
     
 if __name__ == "__main__":
 

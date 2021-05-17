@@ -31,7 +31,7 @@ def unpack_camera_params(camera_params, rotation_matrix=True):
     K = np.float64([[camera_params[6],0,camera_params[8]],
                     [0,camera_params[7],camera_params[9]],
                     [0,0,1]])
-    dist = np.float64(camera_params[10:15])  
+    dist = np.float64(camera_params[10:])  
     
     return K, r, t, dist
 
@@ -57,48 +57,48 @@ def project(points, camera_params, camera_indices):
         K, R, t, dist = unpack_camera_params(camera_params[cam_idx])
     
         mask = camera_indices==cam_idx
-        #proj = cv2.projectPoints(points_[mask,:], rvec, tvec, K, dist)[0].reshape(-1,2)
         proj, m_valid = project_points(points_[mask,:], K, R, t, dist)
         points_proj[mask,:] = proj
         mask_valid[mask] = m_valid
     
     return points_proj, mask_valid
 
-def fun(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
-    """Compute residuals.
-    
-    `params` contains camera parameters and 3-D coordinates.
-    """
-    camera_params = params[:(n_cameras*15)].reshape((n_cameras, 15))
-    points_3d = params[(n_cameras*15):].reshape((n_points, 3))
+def fun(n_camera_params=15):
+    def f(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
+        """Computes the residuals.
+        """        
+        camera_params = params[:(n_cameras*n_camera_params)].reshape((n_cameras, n_camera_params))
+        points_3d = params[(n_cameras*n_camera_params):].reshape((n_points, 3))
 
-    points_proj, mask_valid = project(points_3d[point_indices], camera_params, camera_indices)
-    
-    residuals = (points_proj - points_2d)
-    
-    # we filter out points that are behind the camera
-    residuals[~mask_valid,:] = 0.0
-    
-    return residuals.ravel()
+        points_proj, mask_valid = project(points_3d[point_indices], camera_params, camera_indices)
+
+        residuals = (points_proj - points_2d)
+
+        # we filter out points that are behind the camera
+        residuals[~mask_valid,:] = 0.0
+
+        return residuals.ravel()
+    return f
 
 def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices,
-                               optimize_camera_params=True, optimize_points=True):
+                               optimize_camera_params=True, optimize_points=True,
+                               n_camera_params=15):
     
     m = camera_indices.size * 2
-    n = n_cameras * 15 + n_points * 3
+    n = n_cameras * n_camera_params + n_points * 3
     A = lil_matrix((m, n), dtype=int)
 
     i = np.arange(camera_indices.size)
     
     if optimize_camera_params:
-        for s in range(15):
-            A[2 * i, camera_indices * 15 + s] = 1
-            A[2 * i + 1, camera_indices * 15 + s] = 1
+        for s in range(n_camera_params):
+            A[2 * i, camera_indices * n_camera_params + s] = 1
+            A[2 * i + 1, camera_indices * n_camera_params + s] = 1
 
     if optimize_points:
         for s in range(3):
-            A[2 * i, n_cameras * 15 + point_indices * 3 + s] = 1
-            A[2 * i + 1, n_cameras * 15 + point_indices * 3 + s] = 1
+            A[2 * i, n_cameras * n_camera_params + point_indices * 3 + s] = 1
+            A[2 * i + 1, n_cameras * n_camera_params + point_indices * 3 + s] = 1
 
     return A
 
@@ -176,21 +176,24 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
                       ftol=1e-15, xtol=1e-15, max_nfev=200, loss='linear', f_scale=1, 
                       verbose=True, eps=1e-12, bounds=True, 
                       bounds_cp = [0.15]*6+[200,200,200,200]+[0.1,0.1,0,0,0],
-                      bounds_pt = [100]*3):
+                      bounds_pt = [100]*3, n_dist_coeffs=5):
+    
+    n_camera_params = (10+n_dist_coeffs)
     
     if optimize_camera_params==False and optimize_points==False:
         raise ValueError("One between 'optimize_camera_params' and 'optimize_points' should be True otherwise no variables are optimized!")
 
     A = bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices,
                                    optimize_camera_params=optimize_camera_params,
-                                   optimize_points=optimize_points)
+                                   optimize_points=optimize_points, 
+                                   n_camera_params=n_camera_params)
 
     if verbose: t0 = time.time()
     x0 = np.hstack((camera_params.ravel(), points_3d.ravel()))
 
     if bounds:
         if not optimize_camera_params:
-            bounds_cp = [0]*15
+            bounds_cp = [0]*n_camera_params
         if not optimize_points:
             bounds_p = [0]*3            
         
@@ -210,7 +213,7 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
     original_stdout = sys.stdout
     sys.stdout = stream_to_logger
     
-    res = least_squares(fun, x0, jac='2-point', jac_sparsity=A, verbose=2 if verbose else 0, 
+    res = least_squares(fun(n_camera_params), x0, jac='2-point', jac_sparsity=A, verbose=2 if verbose else 0, 
                         x_scale='jac', loss=loss, f_scale=f_scale, ftol=ftol, xtol=xtol, method='trf',
                         args=(n_cameras, n_points, camera_indices, point_indices, points_2d),
                         max_nfev=max_nfev, bounds=bounds)
@@ -221,8 +224,8 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
         t1 = time.time()
         logging.info("Optimization took {0:.0f} seconds".format(t1 - t0))
     
-    new_camera_params = res.x[:n_cameras*15].reshape(n_cameras, 15)
-    new_points_3d = res.x[n_cameras*15:].reshape(n_points, 3)
+    new_camera_params = res.x[:n_cameras*n_camera_params].reshape(n_cameras, n_camera_params)
+    new_points_3d = res.x[n_cameras*n_camera_params:].reshape(n_points, 3)
     
     if optimize_camera_params and optimize_points:
         return new_camera_params, new_points_3d
@@ -235,8 +238,10 @@ def evaluate(camera_params, points_3d, points_2d,
              camera_indices, point_indices, 
              n_cameras, n_points):
     
+    n_camera_params=camera_params.shape[1]
+    
     x = np.hstack((camera_params.ravel(), points_3d.ravel()))
-    residuals = fun(x, n_cameras, n_points, camera_indices, point_indices, points_2d)    
+    residuals = fun(n_camera_params)(x, n_cameras, n_points, camera_indices, point_indices, points_2d)    
     
     return residuals
 
@@ -399,7 +404,7 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     for i, (view1, view2) in enumerate(setup['minimal_tree']):
         triang_points[(view1, view2)] = {'triang_points':points_3d.tolist()}   
     
-    from .calibration import visualise_cameras_and_triangulated_points
+    from .extrinsics import visualise_cameras_and_triangulated_points
     visualise_cameras_and_triangulated_points(setup['views'], setup['minimal_tree'], poses, triang_points, 
                                               max_points=1000, path=path) 
     

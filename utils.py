@@ -13,7 +13,8 @@ import numpy as np
 __all__ = ["json_read", "json_write", "pickle_read", "pickle_write", 
            "mkdir", "rmdir", "sort_nicely", "find_files", "find_images", 
            "invert_Rt", "rgb2gray", "draw_points", "draw_rectangles", 
-           "dict_keys_to_string", "dict_keys_from_literal_string", "indexes"]
+           "dict_keys_to_string", "dict_keys_from_literal_string", "indexes",
+           "draw_points", "draw_rectangles"]
 
 colors = [[1,0,0], [0,1,0], [0,0,1], 
            [0,0,0], [1,1,1], [1,1,0],
@@ -189,3 +190,43 @@ class StreamToLogger(object):
         if self.linebuf != '':
             self.logger.log(self.log_level, self.linebuf.rstrip())
         self.linebuf = ''
+
+def draw_rectangles(image, centers, size, color='r', thickness=3): 
+    """ Draws rectangles on the image
+    """ 
+    _image = image.copy()
+    if color=='r':
+        color = [255,0,0]
+    elif color=='g':
+        color = [0,255,0]
+    elif color=='b':
+        color = [0,0,255]
+    elif color=='w':
+        color = [255,255,255]
+    elif color=='k':
+        color = [0,0,0]
+        
+    for i, (x,y) in enumerate(np.int_(centers)):
+        pt1 = (x-size[1]//2, y-size[0]//2)
+        pt2 = (x+size[1]//2, y+size[0]//2)
+        _image = cv2.rectangle(_image, pt1, pt2, color=color, thickness=thickness)
+    return _image
+
+def draw_points(image, centers, radius, color='r'): 
+    """ Draws filled point on the image
+    """
+    _image = image.copy()        
+    if color=='r':
+        color = [255,0,0]
+    elif color=='g':
+        color = [0,255,0]
+    elif color=='b':
+        color = [0,0,255]
+    elif color=='w':
+        color = [255,255,255]
+    elif color=='k':
+        color = [0,0,0]
+    
+    for point in centers:
+        _image = cv2.circle(_image, tuple(point.astype(np.int)), radius, color=color, thickness=-1)
+    return _image
