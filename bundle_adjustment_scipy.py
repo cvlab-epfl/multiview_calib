@@ -171,7 +171,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
 
 def bundle_adjustment(camera_params, points_3d, points_2d, 
                       camera_indices, point_indices, 
-                      n_cameras, n_points, 
+                      n_cameras, n_points, ids, 
                       optimize_camera_params=True, optimize_points=True, 
                       ftol=1e-15, xtol=1e-15, max_nfev=200, loss='linear', f_scale=1, 
                       verbose=True, eps=1e-12, bounds=True, 
@@ -188,7 +188,8 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
                                    optimize_points=optimize_points, 
                                    n_camera_params=n_camera_params)
 
-    if verbose: t0 = time.time()
+    if verbose: 
+        t0 = time.time()
     x0 = np.hstack((camera_params.ravel(), points_3d.ravel()))
 
     if bounds:
@@ -196,15 +197,16 @@ def bundle_adjustment(camera_params, points_3d, points_2d,
             bounds_cp = [0]*n_camera_params
         if not optimize_points:
             bounds_p = [0]*3            
-        
+
         bounds = [[],[]]
         for x in camera_params:
             bounds[0] += (x-np.array(bounds_cp)-1e-12).tolist()
-            bounds[1] += (x+np.array(bounds_cp)+1e-12).tolist() 
-
+            bounds[1] += (x+np.array(bounds_cp)+1e-12).tolist()           
+        
         for x in points_3d:  
             bounds[0] += (x-np.array(bounds_pt)-1e-12).tolist()
-            bounds[1] += (x+np.array(bounds_pt)+1e-12).tolist()           
+            bounds[1] += (x+np.array(bounds_pt)+1e-12).tolist() 
+
     else:
         bounds = (-np.inf, np.inf)
         if verbose:

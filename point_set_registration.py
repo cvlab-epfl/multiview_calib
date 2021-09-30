@@ -95,7 +95,7 @@ def point_set_registration(src, dst, verbose=True):
         R, t, scale = cv2.Rodrigues(params[:3])[0], params[3:6], params[-1]
         return R, t, scale
 
-    _src, _dst = src.copy(), dst.copy()
+    _src, _dst = src.copy().astype(np.float32), dst.copy().astype(np.float32)
 
     scale, R, t, _ = procrustes_registration(_src, _dst)
     mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 

@@ -1,8 +1,18 @@
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
+"""
+How to acquire the video of the checkerboard:
+1) Make sure the checkerboard is completely flat.
+2) Always keep the checkerboard at an angle w.r.t the camera plane.
+   Images of checkerbaords whose planes are parallel to the camera plane are not useful.
+3) Keep the checkerboard close to the camera. The area of the checkerboard should intuitively be
+   half of the area of the entire image.
+4) Cover the corners of the image as well. It is fine if the checkerboard goes outside
+   the image; the algorithm will discard these automatically.
+"""
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import cv2
 import os
 import datetime
 import sys
@@ -27,7 +37,7 @@ if int(cv2_major)<4:
     raise ImportError("Opencv version 4+ required!")
 
 '''
-ffmpeg -i VIDEO -r 0.5 frames/frame_%04d.jpg
+ffmpeg -i VIDEO -r 0.5 frames/frame_%04d.png
 python compute_intrinsics.py --folder_images ./frames -ich 6 -icw 8 -s 30 -t 24 --debug
 https://markhedleyjones.com/storage/checkerboards/Checkerboard-A4-30mm-8x6.pdf
 '''
@@ -60,53 +70,9 @@ def process_image(filename_image, inner_corners_height, inner_corners_width, deb
 def main(folder_images, output_folder, description, 
          inner_corners_height, inner_corners_width, square_sizes, 
          alpha, threads, force_monotonicity, monotonic_range, 
-         rational_model, fix_pp, intrinsic_guess, debug):
-    """Main function for computing intrisic parameters.
-    
-    How to acquire the video of the checkerboard:
-    1) Make sure the checkerboard is completely flat.
-    2) Always keep the checkerboard at an angle w.r.t the camera plane.
-       Images of checkerbaords whose planes are parallel to the camera plane are not useful.
-    3) Keep the checkerboard close to the camera. The area of the checkerboard should intuitively be
-       half of the area of the entire image.
-    4) Cover the corners of the image as well. It is fine if the checkerboard goes outside
-       the image; the algorithm will discard these automatically.
-
-    Parameters
-    ----------
-    folder_images : str
-        Path to the folder containing the images
-    output_folder : str
-        Path to the folder for storing the calibration results
-    description : str
-        Optional text that will be added to the json file
-    inner_corners_height : int
-        Number of corners the checkerboard has in the height dimention
-    inner_corners_width : int
-        Number of corners the checkerboard has in the width dimention
-    square_sizes : float
-        Size of the side of the squares the checkerboard uses
-    rational_model : bool
-        Use a camera model more suited for wider angle lenses.
-        It computes 8 distortion parameters instead of the usual 5.
-    alpha : float
-        Free scaling parameter between 0 (when all the pixels in the undistorted image are valid)
-        and 1 (when all the source image pixels are retained in the undistorted image)
-    force_monotonicity: bool
-        Forces monotonicity in the range defined by monotonic_range. To be used only if nothing else work.
-    monotonic_range : float
-        If greater than zero, it forces the distortion parameter to be monotonic in this range.
-        To be used carefully.
-    intrinsic_guess : str (optional)
-        JSON file containing guesses for the intrinsic and distortion parameters.
-    fix_pp : bool
-        If True, freeze the pricipal point such that it is not optimized.
-    threads : int
-        Number of child processes that will be used to parallelize the detection phase.
-    debug : bool
-        If True, images and extra information is saved or printed.
-
-    """
+         rational_model, fix_principal_point, fix_aspect_ratio, 
+         zero_tangent_dist, intrinsic_guess, save_keypoints, 
+         load_keypoints, debug):
     
     debug_folder = os.path.join(output_folder, "debug")
     undistorted_folder = os.path.join(output_folder, "undistorted")
@@ -133,36 +99,47 @@ def main(folder_images, output_folder, description,
     print("force_monotonicity:", force_monotonicity)
     print("monotonic_range:", monotonic_range)
     print("intrinsic_guess:", intrinsic_guess if len(intrinsic_guess) else False)
-    print("fix_pp:", fix_pp)
+    print("fix_principal_point:", fix_principal_point)
+    print("fix_aspect_ratio:", fix_aspect_ratio)
+    print("zero_tangent_dist:", zero_tangent_dist)
     print("threads:", threads)
     print("debug:", debug)
     print("-" * 50)
 
     current_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-    # prepare object points, like (0,0,0), (30,0,0), (60,0,0) ....
-    # each square is 30x30mm
-    # NB. the intrinsic parameters, rvec and distCoeffs do not depend upon the chessboard size, tvec does instead!
-    objp = np.zeros((inner_corners_height*inner_corners_width,3), np.float32)
-    objp[:,:2] = np.mgrid[0:inner_corners_height,0:inner_corners_width].T.reshape(-1,2)
-    objp[:,:2] *= square_sizes
-
-    filename_images = utils.find_images(folder_images, "*")
-    if len(filename_images) == 0:
-        print("!!! Unable to detect images in this folder !!!")
-        sys.exit(0)
-
-    if threads>0:
-        with multiprocessing.Pool(threads) as pool:
-            res = pool.starmap(process_image, zip(filename_images, repeat(inner_corners_height),
-                                                  repeat(inner_corners_width), repeat(debug),
-                                                  repeat(debug_folder)))
+    
+    if load_keypoints:
+        keypoints = utils.json_read(os.path.join(output_folder, "keypoints.json"))
+        objpoints = np.float32(keypoints['objpoints'])
+        imgpoints = np.float32(keypoints['imgpoints'])
     else:
-        res = [process_image(f, inner_corners_height, inner_corners_width,
-                                debug, debug_folder) for f in filename_images]
+        # prepare object points, like (0,0,0), (30,0,0), (60,0,0) ....
+        # each square is 30x30mm
+        # NB. the intrinsic parameters, rvec and distCoeffs do not depend upon the chessboard size, tvec does instead!
+        objp = np.zeros((inner_corners_height*inner_corners_width,3), np.float32)
+        objp[:,:2] = np.mgrid[0:inner_corners_height,0:inner_corners_width].T.reshape(-1,2)
+        objp[:,:2] *= square_sizes
 
-    objpoints = [objp.copy() for r in res if r is not None] # 3d point in real world space
-    imgpoints = [r.copy() for r in res if r is not None] # 2d points in image plane.
+        filename_images = utils.find_images(folder_images, "*")
+        if len(filename_images) == 0:
+            print("!!! Unable to detect images in this folder !!!")
+            sys.exit(0)
+
+        if threads>0:
+            with multiprocessing.Pool(threads) as pool:
+                res = pool.starmap(process_image, zip(filename_images, repeat(inner_corners_height),
+                                                      repeat(inner_corners_width), repeat(debug),
+                                                      repeat(debug_folder)))
+        else:
+            res = [process_image(f, inner_corners_height, inner_corners_width,
+                                    debug, debug_folder) for f in filename_images]
+
+        objpoints = [objp.copy() for r in res if r is not None] # 3d point in real world space
+        imgpoints = [r.copy() for r in res if r is not None] # 2d points in image plane.
+
+        if save_keypoints:
+            utils.json_write(os.path.join(output_folder, "keypoints.json"), {'objpoints':np.float32(objpoints).tolist(),
+                                                                             'imgpoints':np.float32(imgpoints).tolist()})
 
     image = imageio.imread(filename_images[0])
     image_shape = image.shape[:2]
@@ -175,18 +152,22 @@ def main(folder_images, output_folder, description,
     plt.ylim(image_shape[0], 0)
     plt.savefig(os.path.join(output_folder, "detected_keypoints.jpg"), bbox_inches='tight')
     
-    calib_flag = cv2.CALIB_FIX_ASPECT_RATIO
+    calib_flags = 0
     if rational_model:
-        calib_flag += cv2.CALIB_RATIONAL_MODEL
-    if fix_pp:
-        calib_flag += cv2.CALIB_FIX_PRINCIPAL_POINT
+        calib_flags += cv2.CALIB_RATIONAL_MODEL
+    if fix_principal_point:
+        calib_flags += cv2.CALIB_FIX_PRINCIPAL_POINT
+    if fix_aspect_ratio:
+        calib_flags += cv2.CALIB_FIX_ASPECT_RATIO
+    if zero_tangent_dist:
+        calib_flags += cv2.CALIB_ZERO_TANGENT_DIST
         
     K_guess, dist_guess = None, None
     if len(intrinsic_guess):
         intrinsic_guess = utils.json_read(intrinsic_guess)
         K_guess = np.array(intrinsic_guess['K'])
         dist_guess = np.array(intrinsic_guess['dist'])
-        calib_flag = cv2.CALIB_USE_INTRINSIC_GUESS
+        calib_flags = cv2.CALIB_USE_INTRINSIC_GUESS
         
         print("K_guess:", K_guess)
         print("dist_guess:", dist_guess)
@@ -194,14 +175,12 @@ def main(folder_images, output_folder, description,
     print("working hard...")
     #ret, mtx, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, image_shape[::-1], None, None)
     
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    
     iFixedPoint = inner_corners_height-1
     ret, mtx, distCoeffs, rvecs, tvecs, newObjPoints, \
     stdDeviationsIntrinsics, stdDeviationsExtrinsics, \
     stdDeviationsObjPoints, perViewErrors = cv2.calibrateCameraROExtended(objpoints, imgpoints, image_shape[::-1],
                                                                           iFixedPoint, K_guess, dist_guess,
-                                                                          flags=calib_flag, criteria=criteria)
+                                                                          flags=calib_flags)
     
     def reprojection_error(mtx, distCoeffs, rvecs, tvecs):
         # print reprojection error
@@ -223,7 +202,7 @@ def main(folder_images, output_folder, description,
         print("-"*50)
         print(" The distortion function is not monotonous for alpha={:0.2f}!".format(alpha))
         print(" To fix this we suggest sampling more precise points on the corner of the image first.")
-        print(" If this is not enought, use the option Rational Camera Model.")
+        print(" If this is not enough, use the option Rational Camera Model which more adpated to wider lenses.")
         print("-"*50)
     
     # visualise monotonicity
@@ -267,7 +246,7 @@ def main(folder_images, output_folder, description,
             print("mono: RMS Reprojection Error: {}, Total Reprojection Error: {}".format(ret, reproj_error))
 
     d_json = dict({"date":current_datetime, "description":description,
-                   "K":mtx.tolist(), "K_new":newcameramtx.tolist(), "dist":distCoeffs.tolist(),
+                   "K":mtx.tolist(), "K_new":newcameramtx.tolist(), "dist":distCoeffs.ravel().tolist(),
                    "reproj_error":reproj_error, "image_shape":image_shape})
 
     utils.json_write(os.path.join(output_folder, "intrinsics.json"), d_json)
@@ -312,9 +291,12 @@ if __name__ == "__main__":
     parser.add_argument("--output_folder", "-o", type=str, default='./output', required=False)
     parser.add_argument("--description", "-d", type=str, default="", required=False,
                         help="Optional description to add to the output file.")
-    parser.add_argument("--inner_corners_height", "-ich", type=int, required=True)
-    parser.add_argument("--inner_corners_width", "-icw", type=int, required=True)
-    parser.add_argument("--square_sizes", "-s", type=int, default=1, required=False)
+    parser.add_argument("--inner_corners_height", "-ich", type=int, required=True,
+                        help="Number of inner corners on the shortest edge of the checkerboard.")
+    parser.add_argument("--inner_corners_width", "-icw", type=int, required=True,
+                        help="Number of inner corners on the longest edge of the checkerboard.")
+    parser.add_argument("--square_sizes", "-s", type=int, default=1, required=False,
+                        help="Size of the squares")
     parser.add_argument("--alpha", "-a", type=float, default=0.95, required=False,
                         help="Parameter controlling the ammount of out-of-image pixels (\"black regions\") retained in the undistorted image.")
     parser.add_argument("--threads", "-t", type=int, default=4, required=False)
@@ -324,10 +306,14 @@ if __name__ == "__main__":
                         help="Value defining the range for the distortion must be monotonic. Typical value to try 1.3. Be careful: increasing this value may negatively perturb the distortion function.")
     parser.add_argument("--rational_model", "-rm", action="store_true", required=False,
                         help="Use a camera model that is better suited for wider lenses.")
-    parser.add_argument("--fix_pp", "-p", action="store_true", required=False,
+    parser.add_argument("--fix_principal_point", "-fpp", action="store_true", required=False,
                         help="Fix the principal point either at the center of the image or as specified by intrisic guess.")
+    parser.add_argument("--fix_aspect_ratio", "-far", action="store_true", required=False) 
+    parser.add_argument("--zero_tangent_dist", "-ztg", action="store_true", required=False) 
     parser.add_argument("--intrinsic_guess", "-ig", type=str, required=False, default="",
                         help="JSON file containing a initial guesses for the intrinsic matrix and distortion parameters.")
+    parser.add_argument("--save_keypoints", action="store_true", required=False)
+    parser.add_argument("--load_keypoints", action="store_true", required=False)
     parser.add_argument("--debug", action="store_true", required=False)
     args = parser.parse_args()
     

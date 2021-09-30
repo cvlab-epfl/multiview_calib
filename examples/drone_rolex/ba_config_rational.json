@@ -1,24 +1,24 @@
 {
-  "each_training": 2,
+  "each_training": 5,
   "each_visualisation": 1,
   "th_outliers_early": 1000.0,
-  "th_outliers": 15,
+  "th_outliers": 5,
   "optimize_points": true,
   "optimize_camera_params": true,
   "bounds": true,  
   "bounds_cp": [ 
     0.3, 0.3, 0.3,
-    2, 2, 2,
-    100, 100, 100, 100,
-    0.1, 0.1, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    100, 100, 100,
+    400, 400, 400, 400,
+    0.5, 0.5, 0.1, 0.1, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0
   ],
   "bounds_pt": [
     1000,
     1000,
     1000
   ],
-  "max_nfev": 40,
-  "max_nfev2": 40,
+  "max_nfev": 150,
+  "max_nfev2": 150,
   "ftol": 1e-08,
   "xtol": 1e-08,  
   "loss": "linear",

@@ -27,6 +27,7 @@ def main(setup='setup.json',
          dump_images=True,
          output_path="output/relative_poses/"):
     
+    utils.mkdir(output_path)    
     utils.config_logger(os.path.join(output_path, "relative_poses_robust.log"))
     
     setup = utils.json_read(setup)

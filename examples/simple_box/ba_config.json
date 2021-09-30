@@ -8,7 +8,7 @@
   "bounds": true,  
   "bounds_cp": [ 
     0.3, 0.3, 0.3,
-    2, 2, 2,
+    20, 20, 20,
     100, 100, 100, 100,
     0.1, 0.1, 0, 0, 0
   ],
@@ -17,6 +17,7 @@
     1000,
     1000
   ],
+  "bounds_pt_custom": "bounds_pt_custom.json",
   "max_nfev": 40,
   "max_nfev2": 40,
   "ftol": 1e-08,

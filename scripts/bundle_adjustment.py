@@ -83,7 +83,7 @@ def main(config=None,
     if __config__["each_training"]<2 or __config__["each_training"] is None:
         logging.info("Use all the landmarks.")
     else:
-        logging.info("Subsampling the landmarks to 1 every {}.".format(__config__["each_training"]))    
+        logging.info("Subsampling the landmarks to 1 every {}.".format(__config__["each_training"]))  
 
     logging.info("Preparing the input data...(this can take a while depending on the number of points to triangulate)")
     start = time.time()
@@ -161,37 +161,19 @@ def main(config=None,
         plt.show()
         plt.savefig(os.path.join(__config__["output_path"], "early_outlier_rejection_residuals.jpg"), bbox_inches='tight')        
         
-    if __config__["bounds"]:
+    if __config__["bounds"]:        
         logging.info("Bounded optimization:")
         logging.info("\t LB(x)=x-bound; UB(x)=x+bound")
         logging.info("\t rvec bounds=({},{},{})".format(*__config__["bounds_cp"][:3]))
         logging.info("\t tvec bounds=({},{},{})".format(*__config__["bounds_cp"][3:6]))
         logging.info("\t k bounds=(fx={},fy={},c0={},c1={})".format(*__config__["bounds_cp"][6:10]))
-        logging.info("\t dist bounds=({},{},{},{},{})".format(*__config__["bounds_cp"][10:]))
+        if len(__config__["bounds_cp"][10:])==5:
+            logging.info("\t dist bounds=({},{},{},{},{})".format(*__config__["bounds_cp"][10:]))
+        else:
+            logging.info("\t dist bounds=({},{},{},{},{},{},{},{})".format(*__config__["bounds_cp"][10:]))
         logging.info("\t 3d points bounds=(x={},y={},z={})".format(*__config__["bounds_pt"]))
     else:
-        logging.info("Unbounded optimization.")
-        
-    logging.info("Least-Squares optimization of the 3D points:")
-    logging.info("\t optimize camera parameters: {}".format(False))
-    logging.info("\t optimize 3d points: {}".format(True))
-    logging.info("\t ftol={:0.3e}".format(__config__["ftol"]))
-    logging.info("\t xtol={:0.3e}".format(__config__["xtol"]))
-    logging.info("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
-    logging.info("\t max_nfev={}".format(__config__["max_nfev"]))
-        
-    points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
-                                     point_indices, n_cameras, n_points, 
-                                     optimize_camera_params=False, 
-                                     optimize_points=True, 
-                                     ftol=__config__["ftol"], xtol=__config__["xtol"],
-                                     loss=__config__['loss'], f_scale=__config__['f_scale'],
-                                     max_nfev=__config__["max_nfev"], 
-                                     bounds=__config__["bounds"], 
-                                     bounds_cp = __config__["bounds_cp"],
-                                     bounds_pt = __config__["bounds_pt"], 
-                                     verbose=True, eps=1e-12,
-                                     n_dist_coeffs=n_dist_coeffs)        
+        logging.info("Unbounded optimization.")       
         
     logging.info("Least-Squares optimization of 3D points and camera parameters:")
     logging.info("\t optimize camera parameters: {}".format(True))
@@ -200,9 +182,9 @@ def main(config=None,
     logging.info("\t xtol={:0.3e}".format(__config__["xtol"]))
     logging.info("\t loss={} f_scale={:0.2f}".format(__config__["loss"], __config__['f_scale']))
     logging.info("\t max_nfev={}".format(__config__["max_nfev"]))    
-        
-    new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
-                                                         point_indices, n_cameras, n_points, 
+    
+    new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
+                                                         point_indices, n_cameras, n_points, ids, 
                                                          optimize_camera_params=__config__["optimize_camera_params"], 
                                                          optimize_points=__config__["optimize_points"], 
                                                          ftol=__config__["ftol"], xtol=__config__["xtol"],
@@ -210,7 +192,7 @@ def main(config=None,
                                                          max_nfev=__config__["max_nfev"], 
                                                          bounds=__config__["bounds"], 
                                                          bounds_cp = __config__["bounds_cp"],
-                                                         bounds_pt = __config__["bounds_pt"], 
+                                                         bounds_pt = __config__["bounds_pt"],
                                                          verbose=True, eps=1e-12,
                                                          n_dist_coeffs=n_dist_coeffs)
 
@@ -284,8 +266,8 @@ def main(config=None,
                 logging.info("No points left! Exit.")
                 return
 
-            new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d_ref, points_2d, camera_indices, 
-                                                                 point_indices, n_cameras, n_points, 
+            new_camera_params, new_points_3d = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
+                                                                 point_indices, n_cameras, n_points, ids,
                                                                  optimize_camera_params=__config__["optimize_camera_params"], 
                                                                  optimize_points=__config__["optimize_points"], 
                                                                  ftol=__config__["ftol"], xtol=__config__["xtol"],
@@ -293,7 +275,7 @@ def main(config=None,
                                                                  max_nfev=__config__["max_nfev2"], 
                                                                  bounds=__config__["bounds"], 
                                                                  bounds_cp = __config__["bounds_cp"],
-                                                                 bounds_pt = __config__["bounds_pt"], 
+                                                                 bounds_pt = __config__["bounds_pt"],
                                                                  verbose=True, eps=1e-12,
                                                                  n_dist_coeffs=n_dist_coeffs)
 

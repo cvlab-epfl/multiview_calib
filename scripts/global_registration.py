@@ -25,6 +25,7 @@ def main(setup='setup.json',
          filenames="filenames.json",
          output_path="output/global_registration"):
     
+    utils.mkdir(output_path)
     utils.config_logger(os.path.join(output_path, "global_registration.log"))
     
     setup = utils.json_read(setup)

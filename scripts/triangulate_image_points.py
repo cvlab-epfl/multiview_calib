@@ -1,15 +1,14 @@
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 import argparse
-import matplotlib
-import matplotlib.pyplot as plt
 import imageio
 import time
 import cv2
 import os
 import warnings
 warnings.filterwarnings("ignore")
-
-matplotlib.use("Agg")
 
 from multiview_calib import utils 
 from multiview_calib.bundle_adjustment_scipy import (build_input, bundle_adjustment, evaluate, 
@@ -44,7 +43,9 @@ def main(poses='poses.json',
     landmarks = utils.json_read(landmarks)
         
     intrinsics = {view:{'K':data['K'], 'dist':data['dist']} for view,data in poses.items()}
-    extrinsics = {view:{'R':data['R'], 't':data['t']} for view,data in poses.items()}    
+    extrinsics = {view:{'R':data['R'], 't':data['t']} for view,data in poses.items()}  
+    
+    n_dist_coeffs = len(list(intrinsics.values())[0]['dist'])    
   
     res, msg = verify_landmarks(landmarks)
     if not res:
@@ -58,9 +59,9 @@ def main(poses='poses.json',
     start = time.time()
     camera_params, points_3d, points_2d,\
     camera_indices, point_indices, \
-    n_cameras, n_points, ids = build_input(views, intrinsics, extrinsics, 
-                                           landmarks, each=1, 
-                                           view_limit_triang=4)
+    n_cameras, n_points, ids, views_and_ids = build_input(views, intrinsics, extrinsics, 
+                                                           landmarks, each=1, 
+                                                           view_limit_triang=4)
     print("Elapsed time: {:0.2f}s".format(time.time()-start))
         
     print("Least-Squares optimization of the 3D points:")
@@ -70,7 +71,7 @@ def main(poses='poses.json',
     print("\t max_nfev={}".format(__config__["max_nfev"]))
         
     points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
-                                     point_indices, n_cameras, n_points, 
+                                     point_indices, n_cameras, n_points, ids, 
                                      optimize_camera_params=False, 
                                      optimize_points=True, 
                                      ftol=__config__["ftol"], xtol=__config__["xtol"],
@@ -79,7 +80,9 @@ def main(poses='poses.json',
                                      bounds=True, 
                                      bounds_cp = __config__["bounds_cp"],
                                      bounds_pt = __config__["bounds_pt"],
-                                     verbose=True, eps=1e-12)        
+                                     verbose=True, 
+                                     eps=1e-12,
+                                     n_dist_coeffs=n_dist_coeffs)        
 
     f1 = evaluate(camera_params, points_3d_ref, points_2d, 
                   camera_indices, point_indices, 
@@ -115,7 +118,7 @@ def main(poses='poses.json',
         print("Number of points considered outliers: {}".format(sum(mask_outliers)))
 
         points_3d_ref = bundle_adjustment(camera_params, points_3d, points_2d, camera_indices, 
-                                         point_indices, n_cameras, n_points, 
+                                         point_indices, n_cameras, n_points, ids, 
                                          optimize_camera_params=False, 
                                          optimize_points=True, 
                                          ftol=__config__["ftol"], xtol=__config__["xtol"],
@@ -124,7 +127,9 @@ def main(poses='poses.json',
                                          bounds=True, 
                                          bounds_cp = __config__["bounds_cp"],
                                          bounds_pt = __config__["bounds_pt"],
-                                         verbose=True, eps=1e-12)
+                                         verbose=True, 
+                                         eps=1e-12,
+                                         n_dist_coeffs=n_dist_coeffs)
         
         f2 = evaluate(camera_params, points_3d_ref, points_2d, 
                       camera_indices, point_indices, 
