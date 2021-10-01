@@ -13,7 +13,7 @@ __all__ = ["essential_to_fundamental", "fundamental_to_essential", "compute_righ
 
 def essential_to_fundamental(E, K1, K2):
     F = np.dot(np.linalg.inv(K2.T), np.dot(E, np.linalg.inv(K1)))
-    F = F/F[2,2]    
+    F = F/F[2,2]   
     return F
 
 def fundamental_to_essential(F, K1, K2):
