@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2020
+# --------------------------------------------------------------------------
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt

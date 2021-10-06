@@ -1,3 +1,8 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+#               Victor Constantin victor.constantin@epfl.ch
+# Date: 2020
+# --------------------------------------------------------------------------
 """
 How to acquire the video of the checkerboard:
 1) Make sure the checkerboard is completely flat.

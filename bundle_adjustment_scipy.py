@@ -1,3 +1,7 @@
+#----------------------------------------------------------------------------
+# Created By  : Leonardo Citraro leonardo.citraro@epfl.ch
+# Date: 2020
+# --------------------------------------------------------------------------
 import numpy as np
 import cv2
 import os
