@@ -172,7 +172,7 @@ def main(folder_images, output_folder, description,
         intrinsic_guess = utils.json_read(intrinsic_guess)
         K_guess = np.array(intrinsic_guess['K'])
         dist_guess = np.array(intrinsic_guess['dist'])
-        calib_flags = cv2.CALIB_USE_INTRINSIC_GUESS
+        calib_flags += cv2.CALIB_USE_INTRINSIC_GUESS
         
         print("K_guess:", K_guess)
         print("dist_guess:", dist_guess)

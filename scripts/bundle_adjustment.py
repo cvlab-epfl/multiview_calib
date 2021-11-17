@@ -104,14 +104,14 @@ def main(config=None,
     
     f0 = evaluate(camera_params, points_3d, points_2d,
                   camera_indices, point_indices,
-                  n_cameras, n_points)    
+                  n_cameras, n_points) 
 
     if dump_images:
         
         plt.figure()
         camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
         for view_idx in range(n_cameras):
-            m = camera_indices_rav==view_idx
+            m = np.where(camera_indices_rav==view_idx)[0]
             plt.plot(f0[m], label='{}'.format(views[view_idx]))
         plt.title("Residuals at initialization")
         plt.ylabel("Residual [pixels]")
@@ -155,7 +155,7 @@ def main(config=None,
         plt.figure()
         camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
         for view_idx in range(n_cameras):
-            m = camera_indices_rav==view_idx
+            m = np.where(camera_indices_rav==view_idx)[0]
             plt.plot(f01[m], label='{}'.format(views[view_idx]))      
         plt.title("Residuals after early outlier rejection")
         plt.ylabel("Residual [pixels]")
@@ -205,7 +205,7 @@ def main(config=None,
                   camera_indices, point_indices, 
                   n_cameras, n_points)
 
-    avg_abs_res = np.abs(f1).mean()
+    avg_abs_res = np.abs(f1[:]).mean()
     logging.info("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f1)/2))
     if avg_abs_res>15:
         logging.info("!"*20)
@@ -216,7 +216,7 @@ def main(config=None,
         plt.figure()
         camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
         for view_idx in range(n_cameras):
-            m = camera_indices_rav==view_idx
+            m = np.where(camera_indices_rav==view_idx)[0]
             plt.plot(f1[m], label='{}'.format(views[view_idx]))     
         plt.title("Residuals after optimization")
         plt.ylabel("Residual [pixels]")
@@ -247,10 +247,7 @@ def main(config=None,
         points_2d = points_2d[~mask_outliers]
         views_and_ids = [views_and_ids[i] for i,m in enumerate(~mask_outliers) if m]
         optimized_points = np.int32(list(set(point_indices)))
-        logging.info("\t Number of points considered outliers: {}".format(sum(mask_outliers)))
-        
-
-        
+        logging.info("\t Number of points considered outliers: {}".format(sum(mask_outliers)))        
         
         if sum(mask_outliers)==0:
             logging.info("\t Exit.")
@@ -288,7 +285,7 @@ def main(config=None,
                           camera_indices, point_indices, 
                           n_cameras, n_points)
 
-            avg_abs_res = np.abs(f2).mean()
+            avg_abs_res = np.abs(f2[:]).mean()
             logging.info("Average absolute residual: {:0.2f} over {} points.".format(avg_abs_res, len(f2)/2))
             if avg_abs_res>15:
                 logging.info("!"*20)
@@ -299,7 +296,7 @@ def main(config=None,
                 plt.figure()
                 camera_indices_rav = np.vstack([camera_indices]*2).T.ravel()
                 for view_idx in range(n_cameras):
-                    m = camera_indices_rav==view_idx
+                    m = np.where(camera_indices_rav==view_idx)[0]
                     plt.plot(f2[m], label='{}'.format(views[view_idx]))
                 plt.title("Residuals after outlier removal")
                 plt.ylabel("Residual [pixels]")
@@ -318,6 +315,9 @@ def main(config=None,
         
         points3d = new_points_3d[point_indices[camera_indices==i]]
         points2d = points_2d[camera_indices==i]
+        
+        if len(points3d)==0:
+            raise RuntimeError("All 3D points have been discarded/considered outliers.")
         
         mean_error, std_error = reprojection_error(R, t, K, dist, points3d, points2d)
         logging.info("\t {} n_points={}: {:0.3f}+-{:0.3f}".format(view, len(points3d), mean_error, std_error))

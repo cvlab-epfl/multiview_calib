@@ -67,6 +67,8 @@ def project(points, camera_params, camera_indices):
     
     return points_proj, mask_valid
 
+from multiview_calib.intrinsics import distortion_function
+
 def fun(n_camera_params=15):
     def f(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
         """Computes the residuals.
@@ -134,6 +136,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
 
     n_points = 0    
     ids_kept = []
+    n_skipped = 0
     start_index = {view:0 for view in views} # to speedup this loop
     for id, p3ds in zip(ids, points_3d_pairs):
 
@@ -151,6 +154,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
                 pass        
 
         if len(views_idxs)<2:
+            n_skipped += 1
             continue
 
         # estimate of the 3d position
@@ -164,6 +168,8 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
         ids_kept.append(id)
 
         n_points += 1
+        
+    print("Number of landmarks skipped because only visible in one view: {}".format(n_skipped))
 
     point_indices = np.int32(point_indices)
     camera_indices = np.int32(camera_indices)
@@ -272,6 +278,7 @@ def triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_trian
         landmarks_undist[views[j]] = undistort_points(points, K, dist)
               
     points_3d_pairs = []
+    n_skipped = 0
     start_index = {view:0 for view in views} # to speedup this loop
     for i in ids:
 
@@ -297,6 +304,7 @@ def triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_trian
 
         if len(views_idxs)<2:
             points_3d_pairs.append(None)
+            n_skipped += 1
             continue 
 
         points_3d_pairs_ = []
@@ -316,6 +324,9 @@ def triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_trian
 
             points_3d_pairs_.append(p3d)  
         points_3d_pairs.append(points_3d_pairs_) 
+        
+    print("Number of landmarks skipped because only visible in one view: {}".format(n_skipped))
+        
     return points_3d_pairs
             
 def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, points_2d, 

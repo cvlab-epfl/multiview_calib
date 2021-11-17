@@ -97,7 +97,7 @@ def visualise_epilines(view_tree, relative_poses, intrinsics, landmarks, filenam
 
             F = fundamental_from_relative_pose(Rd, td, K1, K2)
 
-        idx = np.arange(pts1_undist.shape[0])
+        idx = np.arange(min(pts1_undist.shape[0],pts2_undist.shape[0]))
         np.random.shuffle(idx)
         img1_, img2_ = draw_epilines(img1_undist, img2_undist, pts1_undist[idx[:50]], pts2_undist[idx[:50]],
                                      F, None, linewidth=2, markersize=20)

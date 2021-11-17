@@ -30,7 +30,7 @@ def estimate_scale_point_sets(src, dst, max_est=50000):
         if i>max_est:
             break
         
-    return np.median(scales), np.std(scales)
+    return np.nanmedian(scales), np.nanstd(scales)
 
 def procrustes_registration(src, dst):
     """
@@ -84,7 +84,7 @@ def procrustes_registration(src, dst):
     
     return scale, R, t, mean_dist
 
-def point_set_registration(src, dst, verbose=True):
+def point_set_registration(src, dst, fixed_scale=None, verbose=True):
     from scipy.optimize import minimize
     
     assert src.shape[0] == dst.shape[0]
@@ -93,15 +93,26 @@ def point_set_registration(src, dst, verbose=True):
     
     def pack_params(R, t, scale):
         rvec = cv2.Rodrigues(R)[0]
-        return np.concatenate([rvec.ravel(), t, [scale]])
+        if fixed_scale is not None:
+            return np.concatenate([rvec.ravel(), t, [fixed_scale]])
+        else:
+            return np.concatenate([rvec.ravel(), t, [scale]])
     
     def unpack_params(params):
         R, t, scale = cv2.Rodrigues(params[:3])[0], params[3:6], params[-1]
-        return R, t, scale
+        if fixed_scale is not None:
+            return R, t, fixed_scale
+        else:
+            return R, t, scale    
 
     _src, _dst = src.copy().astype(np.float32), dst.copy().astype(np.float32)
-
-    scale, R, t, _ = procrustes_registration(_src, _dst)
+    
+    if fixed_scale is not None:
+        _, R, t, _ = procrustes_registration(_src*fixed_scale, _dst)
+        scale = fixed_scale
+    else:
+        scale, R, t, _ = procrustes_registration(_src*fixed_scale, _dst)
+        
     mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 
     
     if verbose:
@@ -119,15 +130,15 @@ def point_set_registration(src, dst, verbose=True):
         R, t, scale = unpack_params(x)
         src_transf = apply_rigid_transform(_src, R, t, scale)
         return average_distance(src_transf, _dst)  
-    
-    x0 = pack_params(R, t, scale)
+
+    x0 = pack_params(R, t, scale)        
     res = minimize(funct, x0, method='Nelder-Mead', 
                    options={'maxiter':10000, 'disp':True}, 
                    tol=1e-24)
     #if verbose:
     #    logging.info(res)   
     
-    R, t , scale = unpack_params(res.x)
+    R, t, scale = unpack_params(res.x)
     mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 
 
     if verbose:
