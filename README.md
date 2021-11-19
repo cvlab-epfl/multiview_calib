@@ -11,7 +11,8 @@ This tool allows to compute the intrinsic and extrinsic camera parameters of a s
 
 ## Installation
 ```
-export PYTHONPATH="...parent folder...:$PYTHONPATH"
+cd MULTIVIEW_CALIB_MASTER
+pip install .
 ```
 
 ## Usage
