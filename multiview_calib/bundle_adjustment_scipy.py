@@ -13,14 +13,16 @@ import logging
 import itertools
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
+import tqdm
 
 from . import utils
 from .singleview_geometry import project_points, undistort_points
 from .twoview_geometry import triangulate
 from .utils import colors as view_colors
 
+
 __all__ = ["build_input", "bundle_adjustment", 
-           "evaluate", "triangulate_all_pairs", "pack_camera_params", "unpack_camera_params",
+           "evaluate", "triangulate_all_pairs", "triangulate_all_pairs_fast", "pack_camera_params", "unpack_camera_params",
            "visualisation", "error_measure"]
 
 logger = logging.getLogger(__name__)
@@ -108,6 +110,7 @@ def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indice
 
     return A
 
+
 def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_triang=2):
     
     for view, val in landmarks.items():
@@ -125,7 +128,7 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     camera_params = np.float64(camera_params)
 
     # triangulate 3D positions from all possible pair of views
-    points_3d_pairs = triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang)
+    points_3d_pairs = triangulate_all_pairs_fast(views, landmarks, ids, camera_params, view_limit_triang)
 
     points_3d = []
     points_2d = []
@@ -135,27 +138,24 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     n_cameras = len(views)
 
     n_points = 0    
-    ids_kept = []
-    n_skipped = 0
-    start_index = {view:0 for view in views} # to speedup this loop
-    for id, p3ds in zip(ids, points_3d_pairs):
 
-        # find in which view sample exists
-        #views_idxs = [j for j in range(n_cameras) if id in landmarks[views[j]]['ids']]
-        views_idxs = []
-        idxs = []
-        for j in range(n_cameras):
-            try:
-                idx = landmarks[views[j]]['ids'].index(id, start_index[views[j]])
-                views_idxs.append(j)
-                idxs.append(idx)
-                start_index[views[j]] = idx
-            except:
-                pass        
+    n_samples = len(ids)
+    ids_np = np.array(ids)
+    ids_in_views = np.zeros((n_samples,n_cameras)) #nsample by ncameras, True | False
+    landmarks_views_ids = {}
+    for j in range(n_cameras):
+        landmarks_views_ids[views[j]] = np.array(landmarks[views[j]]['ids'])
+        ids_in_views[:, j] = np.isin(ids_np, landmarks[views[j]]['ids'])
+    
+    skipped = np.sum(ids_in_views, axis=1)<2  #nsample by 1, True | False
+    n_skipped = np.sum(skipped)
+    ids_kept = ids_np[np.invert(skipped)].tolist()
 
-        if len(views_idxs)<2:
-            n_skipped += 1
+    for i_samples, (id, p3ds) in enumerate(zip(tqdm.tqdm(ids), points_3d_pairs)):
+        if skipped[i_samples]:
             continue
+        views_idxs = np.where(ids_in_views[i_samples])[0].tolist()
+        idxs = [np.where(landmarks_views_ids[views[j]] == id)[0][0] for j in views_idxs]
 
         # estimate of the 3d position
         p3d_mean = np.mean(np.reshape(p3ds, (-1,3)), axis=0)
@@ -178,6 +178,8 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
     
     return camera_params, points_3d, points_2d, camera_indices, \
            point_indices, n_cameras, n_points, ids_kept, views_and_ids 
+
+
 
 def bundle_adjustment(camera_params, points_3d, points_2d, 
                       camera_indices, point_indices, 
@@ -256,6 +258,65 @@ def evaluate(camera_params, points_3d, points_2d,
     residuals = fun(n_camera_params)(x, n_cameras, n_points, camera_indices, point_indices, points_2d)    
     
     return residuals
+
+
+def triangulate_all_pairs_fast(views, landmarks, ids, camera_params, view_limit_triang=5):
+    
+    for view, val in landmarks.items():
+        idxs = np.argsort(val['ids'])
+        landmarks[view]['ids'] = [val['ids'][i] for i in idxs]
+        landmarks[view]['landmarks'] = [val['landmarks'][i] for i in idxs]    
+
+    n_cameras = len(views)
+    n_samples = len(ids)
+
+    # to speed things up
+    poses = []
+    landmarks_undist = {}
+    for j in range(n_cameras):
+        K,R,t,dist = unpack_camera_params(camera_params[j])
+        poses.append((K,R,t,dist))
+        points = landmarks[views[j]]['landmarks']
+        landmarks_undist[views[j]] = undistort_points(points, K, dist)
+    issort = lambda x: (x == np.sort(x)).all()
+    assert issort(ids)
+
+    landmarks_undist_withnan = {}
+    for j in range(n_cameras):
+        points_withnan = np.zeros((n_samples, 2)) * np.nan
+        viewj_ids = np.array(landmarks[views[j]]['ids'])
+        assert issort(viewj_ids)
+        viewj_ids = set(viewj_ids)
+        good_ids = np.array([id in viewj_ids for id in ids], dtype=np.bool8)
+        points_withnan[good_ids] = landmarks_undist[views[j]]
+        landmarks_undist_withnan[views[j]] = points_withnan
+
+    p3d_allview_withnan = []
+    for j1, j2 in itertools.combinations(range(n_cameras), 2):
+        K1,R1,t1,dist1 = poses[j1]
+        K2,R2,t2,dist2 = poses[j2]
+        pts1 = landmarks_undist_withnan[views[j1]]
+        pts2 = landmarks_undist_withnan[views[j2]]
+        p3d = triangulate(pts1, pts2, K1, R1, t1, None, K2, R2, t2, None)
+        p3d_allview_withnan.append(p3d)
+    p3d_allview_withnan = np.array(p3d_allview_withnan) #nviewpairs_nsample_xyz
+    p3d_allview_withnan_x = np.squeeze(p3d_allview_withnan[:,:,0]) #nviewpairs_nsample
+    skipped_index = np.isnan(p3d_allview_withnan_x).all(axis=0)    #find the hidden 3d-points from all view pairs
+    n_skipped = np.sum(skipped_index) 
+    # keep compatibility as original function
+    points_3d_pairs = []
+    for i_sample in range(n_samples):
+        if skipped_index[i_sample]:
+            points_3d_pairs.append(None)
+        else:
+            p3d_i = p3d_allview_withnan[:,i_sample,:]      #nviewpairs_xyz
+            p3d_i = p3d_i[np.invert(np.isnan(p3d_i[:,0]))] #nviewpairs_xyz
+            points_3d_pairs.append(p3d_i)
+        
+    print("Number of landmarks skipped because only visible in one view: {}".format(n_skipped))
+        
+    return points_3d_pairs
+
 
 def triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang=5):
     
@@ -337,7 +398,7 @@ def visualisation(setup, landmarks, filenames_images, camera_params, points_3d, 
     ids = set().union(*[landmarks[view]['ids'] for view in views])
     ids = list(ids)[::each]    
     
-    points_3d_tri = triangulate_all_pairs(views, landmarks, ids, camera_params)
+    points_3d_tri = triangulate_all_pairs_fast(views, landmarks, ids, camera_params)
     points_3d_tri_chained = np.vstack([item for sublist in points_3d_tri if sublist is not None 
                                             for item in sublist if item is not None])
     
