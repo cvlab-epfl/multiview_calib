@@ -165,7 +165,6 @@ def build_input(views, intrinsics, extrinsics, landmarks, each=1, view_limit_tri
         views_and_ids += [(views[j],int(id)) for j in views_idxs] 
         camera_indices += views_idxs  
         point_indices += [n_points]*len(views_idxs)
-        ids_kept.append(id)
 
         n_points += 1
         
@@ -270,6 +269,18 @@ def triangulate_all_pairs_fast(views, landmarks, ids, camera_params, view_limit_
     n_cameras = len(views)
     n_samples = len(ids)
 
+    # downsample the landmarks according to 'eached-ids'
+    landmarks_orig = landmarks
+    landmarks = {view:{'ids':None, 'landmarks':None} for view in views}
+    issort = lambda x: (x == np.sort(x)).all()
+    assert issort(ids)
+    for j in range(n_cameras):
+        viewj_ids = np.array(landmarks_orig[views[j]]['ids'])
+        assert issort(viewj_ids)
+        idx_clean = np.isin(viewj_ids, ids)
+        landmarks[views[j]]['ids'] = [landmarks_orig[views[j]]['ids'][i] for i in np.where(idx_clean)[0]]
+        landmarks[views[j]]['landmarks'] = [landmarks_orig[views[j]]['landmarks'][i] for i in np.where(idx_clean)[0]]
+
     # to speed things up
     poses = []
     landmarks_undist = {}
@@ -278,16 +289,14 @@ def triangulate_all_pairs_fast(views, landmarks, ids, camera_params, view_limit_
         poses.append((K,R,t,dist))
         points = landmarks[views[j]]['landmarks']
         landmarks_undist[views[j]] = undistort_points(points, K, dist)
-    issort = lambda x: (x == np.sort(x)).all()
-    assert issort(ids)
+    
 
     landmarks_undist_withnan = {}
     for j in range(n_cameras):
         points_withnan = np.zeros((n_samples, 2)) * np.nan
         viewj_ids = np.array(landmarks[views[j]]['ids'])
-        assert issort(viewj_ids)
-        viewj_ids = set(viewj_ids)
-        good_ids = np.array([id in viewj_ids for id in ids], dtype=np.bool8)
+        assert np.all(np.isin(viewj_ids, ids))
+        good_ids = np.isin(ids, viewj_ids)
         points_withnan[good_ids] = landmarks_undist[views[j]]
         landmarks_undist_withnan[views[j]] = points_withnan
 
