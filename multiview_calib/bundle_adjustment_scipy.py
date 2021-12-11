@@ -258,7 +258,6 @@ def evaluate(camera_params, points_3d, points_2d,
     
     return residuals
 
-
 def triangulate_all_pairs_fast(views, landmarks, ids, camera_params, view_limit_triang=5):
     
     for view, val in landmarks.items():
@@ -325,7 +324,6 @@ def triangulate_all_pairs_fast(views, landmarks, ids, camera_params, view_limit_
     print("Number of landmarks skipped because only visible in one view: {}".format(n_skipped))
         
     return points_3d_pairs
-
 
 def triangulate_all_pairs(views, landmarks, ids, camera_params, view_limit_triang=5):
     
