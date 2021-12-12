@@ -76,8 +76,9 @@ def main(folder_images, output_folder, description,
          inner_corners_height, inner_corners_width, square_sizes, 
          alpha, threads, force_monotonicity, monotonic_range, 
          rational_model, fix_principal_point, fix_aspect_ratio, 
-         zero_tangent_dist, intrinsic_guess, save_keypoints, 
-         load_keypoints, debug):
+         zero_tangent_dist, criteria_eps, 
+         fix_k1, fix_k2, fix_k3, fix_k4, fix_k5, fix_k6, intrinsic_guess, 
+         save_keypoints, load_keypoints, debug):
     
     debug_folder = os.path.join(output_folder, "debug")
     undistorted_folder = os.path.join(output_folder, "undistorted")
@@ -107,6 +108,7 @@ def main(folder_images, output_folder, description,
     print("fix_principal_point:", fix_principal_point)
     print("fix_aspect_ratio:", fix_aspect_ratio)
     print("zero_tangent_dist:", zero_tangent_dist)
+    print("criteria_eps:", criteria_eps)
     print("threads:", threads)
     print("debug:", debug)
     print("-" * 50)
@@ -166,6 +168,18 @@ def main(folder_images, output_folder, description,
         calib_flags += cv2.CALIB_FIX_ASPECT_RATIO
     if zero_tangent_dist:
         calib_flags += cv2.CALIB_ZERO_TANGENT_DIST
+    if fix_k1:
+        calib_flags += cv2.CALIB_FIX_K1
+    if fix_k2:
+        calib_flags += cv2.CALIB_FIX_K2
+    if fix_k3:
+        calib_flags += cv2.CALIB_FIX_K3
+    if fix_k4:
+        calib_flags += cv2.CALIB_FIX_K4
+    if fix_k5:
+        calib_flags += cv2.CALIB_FIX_K5
+    if fix_k6:
+        calib_flags += cv2.CALIB_FIX_K6        
         
     K_guess, dist_guess = None, None
     if len(intrinsic_guess):
@@ -180,12 +194,14 @@ def main(folder_images, output_folder, description,
     print("working hard...")
     #ret, mtx, distCoeffs, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, image_shape[::-1], None, None)
     
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, criteria_eps)
+    
     iFixedPoint = inner_corners_height-1
     ret, mtx, distCoeffs, rvecs, tvecs, newObjPoints, \
     stdDeviationsIntrinsics, stdDeviationsExtrinsics, \
     stdDeviationsObjPoints, perViewErrors = cv2.calibrateCameraROExtended(objpoints, imgpoints, image_shape[::-1],
                                                                           iFixedPoint, K_guess, dist_guess,
-                                                                          flags=calib_flags)
+                                                                          flags=calib_flags, criteria=criteria)
     
     def reprojection_error(mtx, distCoeffs, rvecs, tvecs):
         # print reprojection error
@@ -315,6 +331,14 @@ if __name__ == "__main__":
                         help="Fix the principal point either at the center of the image or as specified by intrisic guess.")
     parser.add_argument("--fix_aspect_ratio", "-far", action="store_true", required=False) 
     parser.add_argument("--zero_tangent_dist", "-ztg", action="store_true", required=False) 
+    parser.add_argument("--criteria_eps", "-eps", type=float, default=1e-5, required=False,
+                        help="Precision criteria. A larger value can prevent overfitting and artifacts on the borders.")
+    parser.add_argument("--fix_k1", "-k1", action="store_true", required=False)
+    parser.add_argument("--fix_k2", "-k2", action="store_true", required=False)
+    parser.add_argument("--fix_k3", "-k3", action="store_true", required=False)
+    parser.add_argument("--fix_k4", "-k4", action="store_true", required=False)
+    parser.add_argument("--fix_k5", "-k5", action="store_true", required=False)
+    parser.add_argument("--fix_k6", "-k6", action="store_true", required=False)
     parser.add_argument("--intrinsic_guess", "-ig", type=str, required=False, default="",
                         help="JSON file containing a initial guesses for the intrinsic matrix and distortion parameters.")
     parser.add_argument("--save_keypoints", action="store_true", required=False)
