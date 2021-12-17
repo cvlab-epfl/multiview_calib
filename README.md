@@ -17,6 +17,7 @@ pip install .
 
 ## Usage
 
+## Intrinsics estimation
 #### Compute intrinsic parameters:
 Print the following checkerboard and make sure the rectangles are 3x3cm. If they are not make sure to remove any configuration of the printer i.e. autofit
 https://markhedleyjones.com/storage/checkerboards/Checkerboard-A4-30mm-8x6.pdf
@@ -35,6 +36,16 @@ python compute_intrinsics.py --folder_images ./frames -ich 6 -icw 8 -s 30 -t 24 
 ```
 The script outputs several useful information for debugging purposes. One of them is the per keypoint reprojection error, another the monotonicity of the distortion function. If the distortion function is not monotonic, we suggest to sample more precise points on the corner of the image first. If this is not enought, try the Rational Model (-rm) instead. The Rational Model is a model of the lens that is more adapted to cameras with wider lenses.
 To furter understand if the calibration went well, you should perform a visual inspection of the undistorted images that have been saved. The lines in the images should be straight and the picture must look like a normal picture. In case of failure try to update Opencv or re-take the video/pictures.
+
+## Extrinsics estimation
+#### Synchronization:
+In the case the phyiscal landmarks that you want to use to calibrate the camera are not static, you have to synchronize the cameras. We do this by extracting the frames from each one of the videos using the exact same frame rate (the higher the better), then, we look for a fast and recognizible event in the videos (like a hand clap) that allow us to remove the time offset in term of frame indexes from the sequences. Once the offset is removed you can then locate the landmarks in each sequence.
+
+To extract the frames:
+```
+ffmpeg -i VIDEO -vf "fps=30" frames/frame_%06d.jpg
+```
+It is a good idea to extarct the frame arround the native frame rate. Increasing the fps w.r.t the original fps would not make the synchornization more precise.
 
 #### Compute relative poses:
 To recover the pose of each one of the cameras in the rig w.r.t. the first camera we first compute relative poses between pairs of views and then concatenate them to form a tree. To do so, we have to manually define a minimal set of pairs of views that connect every camera. This is done in the file `setup.json`. 
