@@ -48,7 +48,10 @@ ffmpeg -i VIDEO -vf "fps=30" frames/frame_%06d.jpg
 It is a good idea to extarct the frame arround the native frame rate. Increasing the fps w.r.t the original fps would not make the synchornization more precise.
 
 #### Compute relative poses:
-To recover the pose of each one of the cameras in the rig w.r.t. the first camera we first compute relative poses between pairs of views and then concatenate them to form a tree. To do so, we have to manually define a minimal set of pairs of views that connect every camera. This is done in the file `setup.json`. 
+To recover the pose of each one of the cameras in the rig w.r.t. the first camera we first compute relative poses between pairs of views and then concatenate them to form a tree. To do so, we have to manually define a minimal set of pairs of views that connect every camera. This is done in the file `setup.json`.
+```diff
+-Note: do not pair cameras that are facing eachother! Recovering proper geometry in this specifc case is difficult.
+```
 The file named `landmarks.json` contains precise image points for each view that are used to compute fundamental matrices and poses. The file `ìntrinsics.json` contains the intrinsic parameters for each view that we have computed previously. The file `filenames.json` contains a filename of an image for each view which are is used for visualisation purposes.
 Check section `Input files` for more details on the file formats.
 
