@@ -111,9 +111,9 @@ def point_set_registration(src, dst, fixed_scale=None, verbose=True):
         _, R, t, _ = procrustes_registration(_src*fixed_scale, _dst)
         scale = fixed_scale
     else:
-        scale, R, t, _ = procrustes_registration(_src*fixed_scale, _dst)
+        scale, R, t, _ = procrustes_registration(_src, _dst)
         
-    mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst) 
+    mean_dist = average_distance(apply_rigid_transform(_src, R, t, scale), _dst)
     
     if verbose:
         logging.info("Initial guess using Procrustes registration:")
